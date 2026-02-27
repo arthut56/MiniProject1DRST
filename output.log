@@ -1,0 +1,118 @@
+Loading task set from data/task-set-example.csv...
+
+Task Set (30 tasks):
+   Name  BCET  WCET  Period  Deadline
+0    T0     5     8     108       108
+1    T1     3     4     109       109
+2    T2     1     1     113       113
+3    T3     2     2     113       113
+4    T4     5     8     166       166
+5    T5     1     1     190       190
+6    T6     1     1     204       204
+7    T7     1     1     250       250
+8    T8     2     3     359       359
+9    T9     3     5     360       360
+10  T10    23    37     825       825
+11  T11     3     5     919       919
+12  T12    11    17    1111      1111
+13  T13     5     7    1297      1297
+14  T14     8    12    1534      1534
+15  T15     6    10    1636      1636
+16  T16     6    10    1655      1655
+17  T17    14    22    2109      2109
+18  T18     4     6    2256      2256
+19  T19     5     7    2323      2323
+20  T20     8    13    2577      2577
+21  T21     1     1    3896      3896
+22  T22   134   222    5189      5189
+23  T23    91   151    5310      5310
+24  T24    53    88    5485      5485
+25  T25    38    63    5959      5959
+26  T26    69   115    6095      6095
+27  T27    63   105    6267      6267
+28  T28    38    62    7867      7867
+29  T29   212   353    9229      9229
+======================================================================
+REAL-TIME SCHEDULING ANALYSIS
+======================================================================
+
+1. UTILIZATION: U = 0.513882
+
+2. DEADLINE MONOTONIC (DM) ANALYSIS
+----------------------------------------
+   Schedulable: True
+   Message: All tasks schedulable under DM
+
+3. EDF FEASIBILITY (DBF TEST)
+----------------------------------------
+   Feasible: True
+   Message: Feasible by DBF test (U=0.513882, tested up to t_max=9229)
+
+4. EDF WCRT (SCHEDULE CONSTRUCTION)
+----------------------------------------
+   Success: True
+   Message: EDF WCRT computed via schedule construction
+
+   Per-task WCRTs:
+   --------------------------------------------------
+   Task     D_i      Ri_DM        Ri_EDF      
+   --------------------------------------------------
+   T0       108      8            10          
+   T1       109      12           12          
+   T2       113      13           13          
+   T3       113      15           15          
+   T4       166      23           23          
+   T5       190      24           24          
+   T6       204      25           25          
+   T7       250      26           26          
+   T8       359      29           30          
+   T9       360      34           34          
+   T10      825      71           71          
+   T11      919      76           76          
+   T12      1111     93           93          
+   T13      1297     100          100         
+   T14      1534     127          127         
+   T15      1636     137          137         
+   T16      1655     147          147         
+   T17      2109     177          177         
+   T18      2256     183          183         
+   T19      2323     190          190         
+   T20      2577     204          204         
+   T21      3896     206          206         
+   T22      5189     492          522         
+   T23      5310     692          692         
+   T24      5485     805          805         
+   T25      5959     934          934         
+   T26      6095     1075         1075        
+   T27      6267     1242         1242        
+   T28      7867     1327         1327        
+   T29      9229     1885         1885        
+
+5. MONTE CARLO SIMULATION
+----------------------------------------
+   Hyperperiod H = 61265395096106522034771590398531866510563047919263188601266000
+   Simulation runs: 10
+   Hyperperiods per run: 1
+   WARNING: Hyperperiod very large, simulation may be slow.
+   Using reduced simulation time: 1000000
+
+   Running DM simulation...
+Traceback (most recent call last):
+  File "/home/shierfall/Desktop/mini-project1/MiniProject1DRST/scheduler_analysis.py", line 857, in <module>
+    print(f"\nTask Set ({len(tasks)} tasks):")
+              ^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^
+  File "/home/shierfall/Desktop/mini-project1/MiniProject1DRST/scheduler_analysis.py", line 744, in analyze_task_set
+    
+    
+  File "/home/shierfall/Desktop/mini-project1/MiniProject1DRST/scheduler_analysis.py", line 596, in simulate_dm
+    for run in range(num_runs):
+                 ^^^^^^^^^^^^^^^
+  File "/home/shierfall/Desktop/mini-project1/MiniProject1DRST/scheduler_analysis.py", line 533, in run
+    ready_queue.sort(key=lambda j: self.get_priority(j))
+  File "/home/shierfall/Desktop/mini-project1/MiniProject1DRST/scheduler_analysis.py", line 533, in <lambda>
+    ready_queue.sort(key=lambda j: self.get_priority(j))
+                                   ^^^^^^^^^^^^^^^^^^^^
+  File "/home/shierfall/Desktop/mini-project1/MiniProject1DRST/scheduler_analysis.py", line 430, in get_priority
+    def get_priority(self, job: SimJob) -> Tuple:
+
+KeyboardInterrupt
