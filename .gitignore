@@ -1,2 +1,13 @@
 .idea/
 .venv/
+.DRTS_miniproject1_spec.md
+__pycache__/
+*.pyc
+
+# LaTeX build artifacts
+report/*.aux
+report/*.bbl
+report/*.blg
+report/*.log
+report/*.out
+report/*.toc

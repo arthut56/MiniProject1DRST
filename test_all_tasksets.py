@@ -12,7 +12,6 @@ from scheduler_analysis import (
     compute_hyperperiod,
     dm_schedulability_test,
     edf_dbf_feasibility_test,
-    edf_wcrt_schedule_construction,
     simulate_schedule
 )
 
@@ -99,18 +98,22 @@ def test_all_tasksets(base_dir: str = 'task_sets') -> pd.DataFrame:
             try:
                 result = test_task_set(csv_path)
                 result['category'] = category
-                result['expected_schedulable'] = (category == 'schedulable')
-
-                # Check if result matches expectation
-                result['dm_correct'] = (result['dm_schedulable'] == result['expected_schedulable'])
-                result['edf_correct'] = (result['edf_feasible'] == result['expected_schedulable'])
+                # Validate analysis verdicts against WCET simulation evidence.
+                result['dm_matches_wcet_sim'] = (
+                    (result['dm_schedulable'] and result['dm_sim_misses'] == 0) or
+                    ((not result['dm_schedulable']) and result['dm_sim_misses'] > 0)
+                )
+                result['edf_matches_wcet_sim'] = (
+                    (result['edf_feasible'] and result['edf_sim_misses'] == 0) or
+                    ((not result['edf_feasible']) and result['edf_sim_misses'] > 0)
+                )
 
                 results.append(result)
 
                 # Print summary
                 print(f"   Tasks: {result['num_tasks']}, U: {result['utilization']:.4f}")
-                print(f"   DM: {'✓' if result['dm_schedulable'] else '✗'} (expected: {'✓' if result['expected_schedulable'] else '✗'})")
-                print(f"   EDF: {'✓' if result['edf_feasible'] else '✗'} (expected: {'✓' if result['expected_schedulable'] else '✗'})")
+                print(f"   DM analytical: {'✓' if result['dm_schedulable'] else '✗'}")
+                print(f"   EDF analytical: {'✓' if result['edf_feasible'] else '✗'}")
                 print(f"   DM sim misses: {result['dm_sim_misses']}, EDF sim misses: {result['edf_sim_misses']}")
 
             except Exception as e:
@@ -146,11 +149,15 @@ def print_summary(results_df: pd.DataFrame):
         print(f"\n{category.upper()} Task Sets ({len(cat_results)} files):")
         print("-" * 60)
 
-        dm_correct = cat_results['dm_correct'].sum() if 'dm_correct' in cat_results else 0
-        edf_correct = cat_results['edf_correct'].sum() if 'edf_correct' in cat_results else 0
+        dm_sched = cat_results['dm_schedulable'].sum() if 'dm_schedulable' in cat_results else 0
+        edf_sched = cat_results['edf_feasible'].sum() if 'edf_feasible' in cat_results else 0
+        dm_consistent = cat_results['dm_matches_wcet_sim'].sum() if 'dm_matches_wcet_sim' in cat_results else 0
+        edf_consistent = cat_results['edf_matches_wcet_sim'].sum() if 'edf_matches_wcet_sim' in cat_results else 0
 
-        print(f"   DM correct predictions: {dm_correct}/{len(cat_results)}")
-        print(f"   EDF correct predictions: {edf_correct}/{len(cat_results)}")
+        print(f"   DM analytically schedulable: {dm_sched}/{len(cat_results)}")
+        print(f"   EDF analytically schedulable: {edf_sched}/{len(cat_results)}")
+        print(f"   DM verdict consistent with WCET simulation: {dm_consistent}/{len(cat_results)}")
+        print(f"   EDF verdict consistent with WCET simulation: {edf_consistent}/{len(cat_results)}")
 
         # Show utilization range
         print(f"   Utilization range: {cat_results['utilization'].min():.4f} - {cat_results['utilization'].max():.4f}")
