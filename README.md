@@ -23,7 +23,6 @@ python3 scheduler_analysis.py
 - `test_all_tasksets.py`: batch validation on `task_sets/`
 - `task_sets/`: provided test scenarios
 - `data/`: generated result CSV files
-- `SPEC_COMPLIANCE_REVIEW.md`: requirement traceability and compliance notes
 - `report/`: LaTeX report sources (`main.tex`, `references.bib`)
 - `run_generated_experiments.py`: generator + analysis batch runner
 
