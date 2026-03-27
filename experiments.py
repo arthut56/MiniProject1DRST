@@ -1,145 +1,68 @@
-"""
-Utilization Sweep and Comparison Workflow
-- Generate task sets with varying utilization U ∈ {0.5, 0.6, 0.7, 0.75, 0.8, 0.85, 0.9, 0.95, 1.0}
-- For each U, generate N=500 random task sets using UUniFast
-- Run DM RTA and EDF PDC on each
-- Record schedulability verdicts
-- Plot: fraction schedulable vs utilization for DM and EDF
-"""
+"""Utilization sweep over pre-generated task sets."""
 
 import os
-import random
 import pandas as pd
-import numpy as np
-from pathlib import Path
-from typing import List, Tuple, Dict, Any
-import csv
+from typing import List, Dict, Any
+import random
 
 from scheduler_analysis import (
     compute_utilization,
-    compute_hyperperiod,
     dm_schedulability_test,
     edf_dbf_feasibility_test,
 )
+import uunifast
 
+def _u_to_key(u: float) -> str:
+    return f"u{int(round(float(u) * 100)):03d}"
 
-def uunifast_generator(n: int, U: float, seed: int = None) -> List[float]:
-    """
-    Generate utilizations for n tasks using UUniFast algorithm.
-    
-    Returns list of utilizations that sum to approximately U.
-    Reference: Bini & Buttazzo (2005)
-    """
-    if seed is not None:
-        random.seed(seed)
-    
-    utilizations = []
-    remaining = U
-    
-    for i in range(n - 1):
-        # uniform distribution for next task
-        next_util = remaining * random.random() ** (1.0 / (n - i))
-        utilizations.append(next_util)
-        remaining -= next_util
-    
-    utilizations.append(remaining)
-    return utilizations
+def _load_sweep_tasksets(tasksets_dir: str, utilization: float) -> List[str]:
+    util_dir = os.path.join(tasksets_dir, _u_to_key(utilization))
+    if not os.path.isdir(util_dir):
+        return []
+    return sorted(
+        os.path.join(util_dir, name)
+        for name in os.listdir(util_dir)
+        if name.endswith('.csv')
+    )
 
-
-def generate_taskset(n_tasks: int, U: float, seed: int = None) -> pd.DataFrame:
-    """
-    Generate a random periodic task set with given utilization.
-    
-    Uses UUniFast for utilization distribution, then assigns random periods
-    and derives WCET from utilization.
-    
-    Args:
-        n_tasks: Number of tasks
-        U: Total utilization target
-        seed: Random seed
-        
-    Returns:
-        DataFrame with columns [Name, WCET, BCET, Period, Deadline]
-    """
-    if seed is not None:
-        random.seed(seed)
-    
-    utilizations = uunifast_generator(n_tasks, U, seed)
-    
-    # generate random periods in range [10, 1000]
-    periods = [random.randint(10, 1000) for _ in range(n_tasks)]
-    
-    # compute WCET from utilization: C_i = U_i * T_i
-    tasks_data = []
-    for i in range(n_tasks):
-        name = f"Task_{i}"
-        period = periods[i]
-        wcet = max(1, int(utilizations[i] * period))
-        bcet = max(1, random.randint(1, wcet))
-        deadline = period  # implicit deadline (D_i = T_i)
-        
-        tasks_data.append({
-            'Name': name,
-            'WCET': wcet,
-            'BCET': bcet,
-            'Period': period,
-            'Deadline': deadline
-        })
-    
-    df = pd.DataFrame(tasks_data)
-    
-    # verify/adjust utilization: any overshoot above 1.0 must be corrected so
-    # that EDF (which is N&S feasible iff U<=1 for implicit deadlines) is not
-    # incorrectly declared infeasible due to integer-rounding artefacts.
-    actual_u = compute_utilization(df)
-    if actual_u > 1.0:
-        # Scale WCETs down so actual_u just fits below 1.0
-        scale_factor = (min(U, 0.999)) / actual_u
-        df['WCET'] = (df['WCET'] * scale_factor).astype(int)
-        df['WCET'] = df['WCET'].clip(lower=1)
-    
-    return df
+def _normalize_task_columns(tasks: pd.DataFrame) -> pd.DataFrame:
+    tasks = tasks.copy()
+    if 'Task' in tasks.columns and 'Name' not in tasks.columns:
+        tasks = tasks.rename(columns={'Task': 'Name'})
+    required = ['Name', 'WCET', 'BCET', 'Period', 'Deadline']
+    missing = [c for c in required if c not in tasks.columns]
+    if missing:
+        raise ValueError(f"Taskset missing required columns: {missing}")
+    return tasks[required]
 
 
 def test_taskset_verdicts(taskset: pd.DataFrame) -> Dict[str, Any]:
     """Test a single task set and return DM/EDF verdicts."""
-    try:
-        # dm analysis
-        dm_ok, _, _ = dm_schedulability_test(taskset)
-        
-        # edf analysis
-        edf_ok, _ = edf_dbf_feasibility_test(taskset)
-        
-        return {
-            'dm_schedulable': dm_ok,
-            'edf_feasible': edf_ok,
-            'error': None
-        }
-    except Exception as e:
-        return {
-            'dm_schedulable': None,
-            'edf_feasible': None,
-            'error': str(e)
-        }
-
+    dm_ok, _, _ = dm_schedulability_test(taskset)
+    edf_ok, _ = edf_dbf_feasibility_test(taskset)
+    return {
+        'dm_schedulable': dm_ok,
+        'edf_feasible': edf_ok,
+    }
 
 def run_utilization_sweep(
     utilization_levels: List[float] = None,
     samples_per_level: int = 500,
     n_tasks: int = 10,
+    tasksets_dir: str = 'task_sets/generated/sweep',
     output_dir: str = 'data',
-    seed: int = 42
+    verbose: bool = False,
 ) -> pd.DataFrame:
     """
-    Run the required utilization sweep: generate task sets at each U level
-    and record DM/EDF schedulability verdicts.
+    Run the required utilization sweep: load tasksets from directory if they exist.
+    If not, generate them, save to CSV, and then use them.
     
     Args:
         utilization_levels: List of U values to test (default: [0.5, 0.6, ..., 1.0])
         samples_per_level: Number of random task sets per U level
-        n_tasks: Number of tasks per generated task set
+        n_tasks: Number of tasks per generated task set (if None, randomized 10, 15, 20)
+        tasksets_dir: Directory to save/load the CSV task sets
         output_dir: Directory for results CSV
-        seed: Random seed for reproducibility
         
     Returns:
         DataFrame with all results
@@ -147,93 +70,86 @@ def run_utilization_sweep(
     if utilization_levels is None:
         utilization_levels = [0.5, 0.6, 0.7, 0.75, 0.8, 0.85, 0.9, 0.95, 1.0]
     
-    print("=" * 80)
-    print("UTILIZATION SWEEP EXPERIMENT")
-    print("=" * 80)
-    print(f"Utilization levels: {utilization_levels}")
-    print(f"Samples per level: {samples_per_level}")
-    print(f"Tasks per set: {n_tasks}")
-    print()
+    log = print if verbose else (lambda *args, **kwargs: None)
+    log("=" * 80)
+    log("UTILIZATION SWEEP EXPERIMENT (CACHED GENERATION)")
+    log("=" * 80)
+    log(f"Utilization levels: {utilization_levels}")
+    log(f"Samples per level: {samples_per_level}")
+    log(f"Tasks per set: Varied (10, 15, 20)" if n_tasks is None else f"Tasks per set: {n_tasks}")
+    log(f"Tasksets directory: {tasksets_dir}")
+    log()
     
     results = []
-    total_samples = len(utilization_levels) * samples_per_level
-    sample_count = 0
+    sizes = [10, 15, 20]
     
     for U in utilization_levels:
-        print(f"\nUtilization U = {U:.2f}:")
-        print("-" * 60)
+        log(f"\nUtilization U = {U:.2f}:")
+        log("-" * 60)
+        
+        util_dir = os.path.join(tasksets_dir, _u_to_key(U))
+        os.makedirs(util_dir, exist_ok=True)
+        
+        existing_files = _load_sweep_tasksets(tasksets_dir, U)
+        
+        if len(existing_files) < samples_per_level:
+            missing = samples_per_level - len(existing_files)
+            log(f"  Generating {missing} missing task sets for U={U:.2f}...")
+            start_idx = len(existing_files)
+            for i in range(start_idx, samples_per_level):
+                task_count = random.choice(sizes) if n_tasks is None else n_tasks
+                taskset = uunifast.generate_constrained_taskset(task_count, U)
+                out_file = os.path.join(util_dir, f"taskset_{i:04d}.csv")
+                taskset.to_csv(out_file, index=False)
+                
+            existing_files = _load_sweep_tasksets(tasksets_dir, U)
+
+        selected = existing_files[:samples_per_level]
         
         dm_sched_count = 0
         edf_sched_count = 0
-        error_count = 0
-        
-        for sample_id in range(samples_per_level):
-            sample_count += 1
-            
-            # generate random task set
-            taskset = generate_taskset(
-                n_tasks=n_tasks,
-                U=U,
-                seed=seed + sample_count
-            )
-            
-            # test verdicts
+
+        for sample_id, path in enumerate(selected):
+            taskset = _normalize_task_columns(pd.read_csv(path))
+
             verdict = test_taskset_verdicts(taskset)
-            
-            if verdict['error'] is None:
-                dm_ok = verdict['dm_schedulable']
-                edf_ok = verdict['edf_feasible']
-                
-                if dm_ok:
-                    dm_sched_count += 1
-                if edf_ok:
-                    edf_sched_count += 1
-                
-                actual_u = compute_utilization(taskset)
-                results.append({
-                    'utilization_target': U,
-                    'utilization_actual': actual_u,
-                    'n_tasks': n_tasks,
-                    'dm_schedulable': dm_ok,
-                    'edf_feasible': edf_ok,
-                    'sample_id': sample_id
-                })
-            else:
-                error_count += 1
-                results.append({
-                    'utilization_target': U,
-                    'utilization_actual': None,
-                    'n_tasks': n_tasks,
-                    'dm_schedulable': None,
-                    'edf_feasible': None,
-                    'sample_id': sample_id
-                })
+            dm_ok = verdict['dm_schedulable']
+            edf_ok = verdict['edf_feasible']
+
+            if dm_ok:
+                dm_sched_count += 1
+            if edf_ok:
+                edf_sched_count += 1
+
+            actual_u = compute_utilization(taskset)
+            results.append({
+                'utilization_target': U,
+                'utilization_actual': actual_u,
+                'n_tasks': len(taskset),
+                'dm_schedulable': dm_ok,
+                'edf_feasible': edf_ok,
+                'sample_id': sample_id,
+                'taskset_file': os.path.basename(path),
+            })
             
             if (sample_id + 1) % 100 == 0:
-                print(f"  Completed {sample_id + 1}/{samples_per_level} samples")
+                log(f"  Completed {sample_id + 1}/{samples_per_level} samples")
         
-        # summary for this U level
-        valid_samples = samples_per_level - error_count
-        if valid_samples > 0:
-            dm_frac = dm_sched_count / valid_samples
-            edf_frac = edf_sched_count / valid_samples
-            print(f"  Results (n={valid_samples}):")
-            print(f"    DM schedulable: {dm_sched_count}/{valid_samples} ({dm_frac:.1%})")
-            print(f"    EDF schedulable: {edf_sched_count}/{valid_samples} ({edf_frac:.1%})")
-        
-        if error_count > 0:
-            print(f"  Errors: {error_count}")
+        dm_frac = dm_sched_count / samples_per_level
+        edf_frac = edf_sched_count / samples_per_level
+        log(f"  Results (n={samples_per_level}):")
+        log(f"    DM schedulable: {dm_sched_count}/{samples_per_level} ({dm_frac:.1%})")
+        log(f"    EDF schedulable: {edf_sched_count}/{samples_per_level} ({edf_frac:.1%})")
     
-    # save results
     os.makedirs(output_dir, exist_ok=True)
     output_file = os.path.join(output_dir, 'utilization_sweep_results.csv')
     
     results_df = pd.DataFrame(results)
     results_df.to_csv(output_file, index=False)
     
-    print("\n" + "=" * 80)
-    print(f"Results saved to: {output_file}")
-    print("=" * 80)
+    log("\n" + "=" * 80)
+    log(f"Results saved to: {output_file}")
+    log("=" * 80)
     
     return results_df
 
@@ -266,19 +182,17 @@ def compute_fraction_schedulable(results_df: pd.DataFrame) -> pd.DataFrame:
 
 
 if __name__ == "__main__":
-    # run the utilization sweep
     results_df = run_utilization_sweep(
         utilization_levels=[0.5, 0.6, 0.7, 0.75, 0.8, 0.85, 0.9, 0.95, 1.0],
-        samples_per_level=500,
+        samples_per_level=150,
         n_tasks=10,
+        tasksets_dir='task_sets/generated/sweep',
         output_dir='data',
-        seed=42
+        verbose=True,
     )
     
-    # compute summary statistics
     summary_df = compute_fraction_schedulable(results_df)
     summary_df.to_csv('data/fraction_schedulable_summary.csv', index=False)
     
     print("\nFraction Schedulable Summary:")
     print(summary_df.to_string(index=False))
-

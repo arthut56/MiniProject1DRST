@@ -1,22 +1,3 @@
-"""
-Real-Time Scheduling Analysis Tool
-==================================
-Implements:
-- Part A: Deadline Monotonic (DM) worst-case response times (RTA)
-- Part B: EDF feasibility test (Processor Demand / DBF)
-- Part C: EDF WCRT computation via schedule construction
-- Part D: Discrete-event simulation for both DM and EDF
-- Part E: Comparison and reporting
-
-Task model: tau_i = (C_i, T_i, D_i, B_i)
-- C_i: WCET (Worst-Case Execution Time)
-- B_i: BCET (Best-Case Execution Time) - used only for simulation
-- T_i: Period
-- D_i: Relative deadline (constrained: D_i <= T_i)
-
-Synchronous release: all tasks released at time 0
-"""
-
 import math
 from math import lcm
 import heapq
@@ -30,10 +11,6 @@ import random
 
 MAX_EXACT_HYPERPERIOD = 10**7
 
-
-# =============================================================================
-# UTILITY FUNCTIONS
-# =============================================================================
 
 def compute_hyperperiod(periods: List[int]) -> int:
     """Compute the hyperperiod (LCM) of all task periods."""
@@ -72,7 +49,6 @@ def dm_rta(tasks: pd.DataFrame) -> Tuple[pd.DataFrame, Tuple[bool, str]]:
     """
     tasks = tasks.copy().reset_index(drop=True)
 
-    # Tie-break equal deadlines by original task index for deterministic DM priority.
     tasks["_orig_idx"] = tasks.index
     tasks = tasks.sort_values(by=["Deadline", "_orig_idx"]).reset_index(drop=True)
 
@@ -83,14 +59,14 @@ def dm_rta(tasks: pd.DataFrame) -> Tuple[pd.DataFrame, Tuple[bool, str]]:
         Ci = int(tasks.loc[i, "WCET"])
         Di = int(tasks.loc[i, "Deadline"])
 
-        # Initial response time estimate
+        # initial response time estimate
         R = Ci
 
         max_iterations = 100000
         for iteration in range(max_iterations):
             R_old = R
 
-            # Compute interference from higher-priority tasks (h < i)
+            # compute interference from higher-priority tasks (h < i)
             I = 0
             for h in range(i):
                 Ch = int(tasks.loc[h, "WCET"])
@@ -164,7 +140,7 @@ def edf_dbf_feasibility_test(tasks: pd.DataFrame) -> Tuple[bool, str]:
     # Compute utilization
     U = compute_utilization(tasks)
 
-    # Check for U approximately equal to 1.0 first (floating-point tolerance)
+    #(floating-point tolerance)
     if abs(U - 1.0) < 1e-9:
         # U == 1: feasible only if all deadlines == periods
         if (tasks["Deadline"] == tasks["Period"]).all():
@@ -202,7 +178,7 @@ def edf_dbf_feasibility_test(tasks: pd.DataFrame) -> Tuple[bool, str]:
                 test_points.add(d)
             k += 1
 
-    # Test DBF at each deadline
+    # test DBF at each deadline
     for t in sorted(test_points):
         demand = dbf(tasks, t)
         if demand > t:
@@ -211,7 +187,7 @@ def edf_dbf_feasibility_test(tasks: pd.DataFrame) -> Tuple[bool, str]:
     return True, f"Feasible by DBF test (U={U:.6f}, tested up to t_max={t_max})"
 
 
-# EDF WCRT COMPUTATION (Schedule Construction)
+# EDF WCRT COMPUTATION
 
 @dataclass(order=True)
 class Job:
@@ -249,13 +225,13 @@ def edf_wcrt_schedule_construction(tasks: pd.DataFrame) -> Tuple[pd.DataFrame, T
     n = len(tasks)
     H = compute_hyperperiod(tasks["Period"].tolist())
 
-    # Exact analysis is over one full hyperperiod.
+    # exact analysis is over one full hyperperiod.
     if H > MAX_EXACT_HYPERPERIOD:
         tasks["Ri_EDF"] = ["NOT_COMPUTED"] * n
         return tasks, (False, f"Hyperperiod H={H} exceeds exact-analysis cap {MAX_EXACT_HYPERPERIOD}")
 
-    # Generate all jobs released in [0, H)
-    jobs = []  # List of all jobs
+    #generate all jobs released in [0, H)
+    jobs = []
     for i in range(n):
         Ti = int(tasks.loc[i, "Period"])
         Di = int(tasks.loc[i, "Deadline"])
@@ -277,34 +253,33 @@ def edf_wcrt_schedule_construction(tasks: pd.DataFrame) -> Tuple[pd.DataFrame, T
             jobs.append(job)
             k += 1
 
-    # Sort jobs by release time for event generation
+    # sort jobs by release time for event generation
     jobs.sort(key=lambda j: (j.release_time, j.absolute_deadline))
 
-    # Event-driven simulation
     current_time = 0
-    ready_queue = []  # Min-heap by absolute deadline
-    job_index = 0  # Next job to release
+    ready_queue = []  # min-heap by absolute deadline for efficiency
+    job_index = 0
     running_job = None
     completed_jobs = []
 
     while True:
-        # Release all jobs at current_time
+        # release all jobs at current_time
         while job_index < len(jobs) and jobs[job_index].release_time == current_time:
             job = jobs[job_index]
             heapq.heappush(ready_queue, (job.absolute_deadline, job.task_id, job.job_id, job))
             job_index += 1
 
-        # Stop once there are no queued/running jobs and no future releases.
+        #stop once there are no queued/running jobs and no future releases.
         if not ready_queue and running_job is None and job_index >= len(jobs):
             break
 
-        # Select job with earliest deadline
+        # select job with earliest deadline
         if ready_queue:
             _, _, _, running_job = ready_queue[0]
         else:
             running_job = None
 
-        # Find next event time
+    #find next event time
         next_release = jobs[job_index].release_time if job_index < len(jobs) else float('inf')
 
         if running_job is not None:
@@ -324,18 +299,18 @@ def edf_wcrt_schedule_construction(tasks: pd.DataFrame) -> Tuple[pd.DataFrame, T
                 heapq.heappop(ready_queue)
                 running_job = None
         else:
-            # Idle - jump to next release
+            # idle - jump to next release
             if next_release == float('inf'):
                 break
             current_time = int(next_release)
 
-    # Compute WCRT for each task (max response time of jobs released before H)
+        #compute WCRT for each task (max response time of jobs released before H)
     wcrts = [0] * n
     for job in completed_jobs:
         if job.release_time < H:
             R = job.finish_time - job.release_time
             if R > job.absolute_deadline - job.release_time:
-                # Deadline miss detected
+                # Deadline miss found
                 tasks["Ri_EDF"] = ["UNFEASIBLE"] * n
                 return tasks, (False, f"Task {job.task_id} job {job.job_id} missed deadline")
             wcrts[job.task_id] = max(wcrts[job.task_id], R)
@@ -388,10 +363,7 @@ def run_stochastic_simulation_stats(tasks: pd.DataFrame, policy: str,
     }
 
 
-# =============================================================================
-# PART D: DISCRETE-EVENT SIMULATION
-# =============================================================================
-
+#Discrete event sim
 class EventType(Enum):
     RELEASE = 1
     COMPLETE = 2
@@ -413,7 +385,7 @@ class SimJob:
     job_id: int
     release_time: int
     absolute_deadline: int
-    execution_time: int  # Sampled execution time (BCET to WCET)
+    execution_time: int  # sampled execution time (BCET to WCET)
     remaining_time: int
     start_time: Optional[int] = None
     finish_time: Optional[int] = None
@@ -446,7 +418,7 @@ class DiscreteEventSimulator:
         self.rng = random.Random(seed)
         self.n = len(tasks)
 
-        # Precompute task parameters
+        # precompute task parameters
         self.task_params = []
         for i in range(self.n):
             self.task_params.append({
@@ -494,7 +466,7 @@ class DiscreteEventSimulator:
             - 'preemptions': {task_id: total_preemptions}
             - 'completed_jobs': list of all completed SimJob
         """
-        # Build all job releases in [0, simulation_time)
+        # build all job releases in [0, simulation_time)
         releases = []
         for task_id in range(self.n):
             T = self.task_params[task_id]['T']
@@ -580,7 +552,7 @@ class DiscreteEventSimulator:
                 running_job.start_time = current_time
 
 
-        # Compute max response times
+        # compute max response times
         max_response_times = {}
         for i in range(self.n):
             if response_times[i]:
@@ -630,12 +602,10 @@ def simulate_schedule(tasks: pd.DataFrame, policy: str = "DM",
     }
 
 
-# =============================================================================
-# PART E: COMPARISON AND REPORTING
-# =============================================================================
 
 def analyze_task_set(tasks: pd.DataFrame, num_sim_runs: int = 100,
-                     num_hyperperiods: int = 1, seed: int = 42) -> Dict[str, Any]:
+                     num_hyperperiods: int = 1, seed: int = 42,
+                     verbose: bool = False) -> Dict[str, Any]:
     """
     Complete analysis of a task set.
 
@@ -649,36 +619,37 @@ def analyze_task_set(tasks: pd.DataFrame, num_sim_runs: int = 100,
 
     Returns comprehensive analysis results.
     """
-    print("=" * 70)
-    print("REAL-TIME SCHEDULING ANALYSIS")
-    print("=" * 70)
+    log = print if verbose else (lambda *args, **kwargs: None)
+    log("=" * 70)
+    log("REAL-TIME SCHEDULING ANALYSIS")
+    log("=" * 70)
 
     n = len(tasks)
 
     # 1. Utilization
     U = compute_utilization(tasks)
-    print(f"\n1. UTILIZATION: U = {U:.6f}")
+    log(f"\n1. UTILIZATION: U = {U:.6f}")
 
     # 2. DM RTA
-    print("\n2. DEADLINE MONOTONIC (DM) ANALYSIS")
-    print("-" * 40)
+    log("\n2. DEADLINE MONOTONIC (DM) ANALYSIS")
+    log("-" * 40)
     dm_ok, dm_msg, tasks_dm = dm_schedulability_test(tasks)
-    print(f"   Schedulable: {dm_ok}")
-    print(f"   Message: {dm_msg}")
+    log(f"   Schedulable: {dm_ok}")
+    log(f"   Message: {dm_msg}")
 
     # 3. EDF DBF Feasibility
-    print("\n3. EDF FEASIBILITY (DBF TEST)")
-    print("-" * 40)
+    log("\n3. EDF FEASIBILITY (DBF TEST)")
+    log("-" * 40)
     edf_ok, edf_msg = edf_dbf_feasibility_test(tasks)
-    print(f"   Feasible: {edf_ok}")
-    print(f"   Message: {edf_msg}")
+    log(f"   Feasible: {edf_ok}")
+    log(f"   Message: {edf_msg}")
 
     # 4. EDF WCRT (Schedule Construction)
-    print("\n4. EDF WCRT (SCHEDULE CONSTRUCTION)")
-    print("-" * 40)
+    log("\n4. EDF WCRT (SCHEDULE CONSTRUCTION)")
+    log("-" * 40)
     tasks_edf, (edf_wcrt_ok, edf_wcrt_msg) = edf_wcrt_schedule_construction(tasks)
-    print(f"   Success: {edf_wcrt_ok}")
-    print(f"   Message: {edf_wcrt_msg}")
+    log(f"   Success: {edf_wcrt_ok}")
+    log(f"   Message: {edf_wcrt_msg}")
 
     # Combine results
     results_df = tasks.copy()
@@ -689,42 +660,42 @@ def analyze_task_set(tasks: pd.DataFrame, num_sim_runs: int = 100,
     results_df["Ri_DM"] = dm_results["Ri_DM"]
     results_df = results_df.reset_index()
 
-    # Add EDF results
+    # add EDF results
     results_df["Ri_EDF"] = tasks_edf["Ri_EDF"].values
 
-    print("\n   Per-task Analytical WCRTs:")
-    print("   " + "-" * 50)
-    print(f"   {'Task':<8} {'D_i':<8} {'Ri_DM':<12} {'Ri_EDF':<12}")
-    print("   " + "-" * 50)
+    log("\n   Per-task Analytical WCRTs:")
+    log("   " + "-" * 50)
+    log(f"   {'Task':<8} {'D_i':<8} {'Ri_DM':<12} {'Ri_EDF':<12}")
+    log("   " + "-" * 50)
     for i, row in results_df.iterrows():
         name = row['Name']
         Di = row['Deadline']
         Ri_DM = row['Ri_DM']
         Ri_EDF = row['Ri_EDF']
-        print(f"   {name:<8} {Di:<8} {str(Ri_DM):<12} {str(Ri_EDF):<12}")
+        log(f"   {name:<8} {Di:<8} {str(Ri_DM):<12} {str(Ri_EDF):<12}")
 
-    # 5. Discrete-Event Simulation (WCET-based for comparison with analysis)
-    print("\n5. DISCRETE-EVENT SIMULATION (WCET)")
-    print("-" * 40)
+    # 5. Discrete-Event Simulation
+    log("\n5. DISCRETE-EVENT SIMULATION (WCET)")
+    log("-" * 40)
 
     H = compute_hyperperiod(tasks["Period"].tolist())
-    print(f"   Hyperperiod H = {H}")
+    log(f"   Hyperperiod H = {H}")
 
     max_sim_time = min(H, 100000)
     sim_time = max_sim_time * max(1, int(num_hyperperiods))
     if H > max_sim_time:
-        print(f"   WARNING: Hyperperiod large, using simulation time = {max_sim_time}")
+        log(f"   WARNING: Hyperperiod large, using simulation time = {max_sim_time}")
     if num_hyperperiods > 1:
-        print(f"   Running for {num_hyperperiods} hyperperiods ({sim_time} time units)")
+        log(f"   Running for {num_hyperperiods} hyperperiods ({sim_time} time units)")
 
-    print("\n   Running DM simulation (WCET)...")
+    log("\n   Running DM simulation (WCET)...")
     dm_sim = simulate_schedule(tasks, policy="DM", use_wcet=True, max_sim_time=sim_time)
 
-    print("   Running EDF simulation (WCET)...")
+    log("   Running EDF simulation (WCET)...")
     edf_sim = simulate_schedule(tasks, policy="EDF", use_wcet=True, max_sim_time=sim_time)
 
-    # Stochastic simulation statistics
-    print(f"\n   Running stochastic simulations ({num_sim_runs} runs, Uniform[BCET, WCET])...")
+    # Stochastic simulation statistics p7
+    log(f"\n   Running stochastic simulations ({num_sim_runs} runs, Uniform[BCET, WCET])...")
     dm_stochastic = run_stochastic_simulation_stats(tasks, "DM", num_sim_runs, sim_time, seed)
     edf_stochastic = run_stochastic_simulation_stats(tasks, "EDF", num_sim_runs, sim_time, seed)
 
@@ -753,10 +724,10 @@ def analyze_task_set(tasks: pd.DataFrame, num_sim_runs: int = 100,
     results_df["EDF_preemptions"] = [edf_sim['preemptions'].get(i, 0) for i in range(n)]
 
     # 6. Comparison: Analytical vs Simulation
-    print("\n6. COMPARISON: ANALYTICAL vs SIMULATION")
-    print("-" * 70)
-    print(f"   {'Task':<8} {'D_i':<6} {'DM_ana':<8} {'DM_sim':<8} {'Match':<6} {'EDF_ana':<8} {'EDF_sim':<8} {'Match':<6}")
-    print("   " + "-" * 70)
+    log("\n6. COMPARISON: ANALYTICAL vs SIMULATION")
+    log("-" * 70)
+    log(f"   {'Task':<8} {'D_i':<6} {'DM_ana':<8} {'DM_sim':<8} {'Match':<6} {'EDF_ana':<8} {'EDF_sim':<8} {'Match':<6}")
+    log("   " + "-" * 70)
 
     dm_matches = 0
     edf_matches = 0
@@ -783,27 +754,27 @@ def analyze_task_set(tasks: pd.DataFrame, num_sim_runs: int = 100,
         if edf_match == "PASS":
             edf_matches += 1
 
-        print(f"   {name:<8} {Di:<6} {str(dm_ana):<8} {str(dm_sim_val):<8} {dm_match:<6} {str(edf_ana):<8} {str(edf_sim_val):<8} {edf_match:<6}")
+        log(f"   {name:<8} {Di:<6} {str(dm_ana):<8} {str(dm_sim_val):<8} {dm_match:<6} {str(edf_ana):<8} {str(edf_sim_val):<8} {edf_match:<6}")
 
     # Summary
-    print("\n" + "=" * 70)
-    print("SUMMARY")
-    print("=" * 70)
-    print(f"   Total Utilization: {U:.6f}")
-    print(f"   DM Schedulable (analytical): {dm_ok}")
-    print(f"   EDF Feasible (analytical): {edf_ok}")
-    print(f"\n   DM: Analytical vs Simulation match: {dm_matches}/{n} tasks")
-    print(f"   EDF: Analytical vs Simulation match: {edf_matches}/{edf_comparable} tasks")
+    log("\n" + "=" * 70)
+    log("SUMMARY")
+    log("=" * 70)
+    log(f"   Total Utilization: {U:.6f}")
+    log(f"   DM Schedulable (analytical): {dm_ok}")
+    log(f"   EDF Feasible (analytical): {edf_ok}")
+    log(f"\n   DM: Analytical vs Simulation match: {dm_matches}/{n} tasks")
+    log(f"   EDF: Analytical vs Simulation match: {edf_matches}/{edf_comparable} tasks")
 
     dm_total_misses = sum(dm_sim['deadline_misses'].values())
     edf_total_misses = sum(edf_sim['deadline_misses'].values())
-    print(f"\n   DM Deadline Misses (simulation): {dm_total_misses}")
-    print(f"   EDF Deadline Misses (simulation): {edf_total_misses}")
+    log(f"\n   DM Deadline Misses (simulation): {dm_total_misses}")
+    log(f"   EDF Deadline Misses (simulation): {edf_total_misses}")
 
     dm_total_preempt = sum(dm_sim['preemptions'].values())
     edf_total_preempt = sum(edf_sim['preemptions'].values())
-    print(f"   DM Total Preemptions: {dm_total_preempt}")
-    print(f"   EDF Total Preemptions: {edf_total_preempt}")
+    log(f"   DM Total Preemptions: {dm_total_preempt}")
+    log(f"   EDF Total Preemptions: {edf_total_preempt}")
 
     return {
         'utilization': U,
@@ -820,7 +791,7 @@ def analyze_task_set(tasks: pd.DataFrame, num_sim_runs: int = 100,
 
 
 def generate_report(results: Dict[str, Any], output_file: Optional[str] = None) -> str:
-    """Generate a formatted report from analysis results."""
+    """PrettyPrint of the analysis results."""
 
     lines = []
     lines.append("=" * 70)
@@ -865,10 +836,6 @@ def generate_report(results: Dict[str, Any], output_file: Optional[str] = None) 
     return report
 
 
-# =============================================================================
-# MAIN EXECUTION
-# =============================================================================
-
 def normalize_task_columns(tasks: pd.DataFrame) -> pd.DataFrame:
     """Normalize column names to handle different CSV formats."""
     tasks = tasks.copy()
@@ -876,10 +843,10 @@ def normalize_task_columns(tasks: pd.DataFrame) -> pd.DataFrame:
     if 'Task' in tasks.columns and 'Name' not in tasks.columns:
         tasks = tasks.rename(columns={'Task': 'Name'})
     return tasks
+    #extend as needed
 
 
 if __name__ == "__main__":
-    # Load task set
     csv_path = 'task_sets/schedulable/Full_Utilization_NonUnique_Periods_taskset.csv'
     print(f"Loading task set from {csv_path}...")
     tasks = pd.read_csv(csv_path)

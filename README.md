@@ -19,6 +19,8 @@ python3 run_all_experiments.py --quick
 Outputs:
 - `data/analysis_results.csv`
 - `data/all_tasksets_results.csv`
+- `data/fig8_tc5_rt_samples.csv`
+- `data/fig9_arj_u07_u08_u09.csv`
 - `data/figures/fig*.png`
 
 ## Full Workflow
@@ -43,7 +45,21 @@ python3 experiments.py
 
 # Plot generation only (expects prior CSVs in data/)
 python3 visualizations.py
+
 ```
+
+`visualizations.py` reads CSV sources for all non-gantt plots:
+- Fig4 uses `data/fraction_schedulable_summary.csv`
+- Fig5-7 use `data/analysis_results.csv`
+- Fig8 uses `data/fig8_tc5_rt_samples.csv`
+- Fig9 uses `data/fig9_arj_u07_u08_u09.csv`
+
+Note: `visualizations.py` is read-only with respect to CSV inputs. The full workflow (`run_all_experiments.py`) generates `fig8/fig9` CSVs explicitly before plotting.
+
+Figure 8/9 consume tasksets in `task_sets/generated/report_fig8_taskset.csv` and
+`task_sets/generated/report_fig9_u0*.csv`.
+
+`experiments.py` uses pre-generated sweep tasksets from `task_sets/generated/sweep/uXXX/*.csv`.
 
 ## Layout
 

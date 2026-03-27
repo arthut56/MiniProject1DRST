@@ -12,8 +12,6 @@ import pandas as pd
 import matplotlib.pyplot as plt
 from scheduler_analysis import compute_hyperperiod
 
-# Create task sets for TC1 and TC2
-# TC1: U<0.69, D_i=T_i, both schedulable
 TC1_TASKS = {
     'Name': ['tau_1', 'tau_2', 'tau_3'],
     'BCET': [1, 2, 1],
@@ -22,7 +20,6 @@ TC1_TASKS = {
     'Deadline': [4, 6, 8],
 }
 
-# TC2: U=0.971, EDF schedulable, DM infeasible
 TC2_TASKS = {
     'Name': ['tau_1', 'tau_2'],
     'BCET': [2, 4],
@@ -54,7 +51,6 @@ def simulate_schedule_gantt(tasks, policy='DM', time_limit=None):
     if time_limit is None:
         time_limit = compute_hyperperiod(tasks['Period'].tolist())
     
-    # Generate all releases in [0, time_limit)
     jobs = []
     for i, row in tasks.iterrows():
         T = int(row['Period'])
@@ -83,7 +79,6 @@ def simulate_schedule_gantt(tasks, policy='DM', time_limit=None):
 
     jobs.sort(key=lambda j: (j.release_time, j.task_id, j.job_id))
     
-    # Event-driven simulation
     current_time = 0
     ready_queue = []
     job_index = 0
@@ -153,7 +148,6 @@ def simulate_schedule_gantt(tasks, policy='DM', time_limit=None):
         if current_time >= time_limit:
             break
 
-    # merge adjacent fragments of the same task for cleaner bars
     merged = []
     for task_id, start, end in events:
         if end <= start:
@@ -218,7 +212,6 @@ def draw_gantt(ax, events, tasks, title, time_limit, wcrts=None, deadline_misses
                         fontsize=10, fontweight='bold', color='red')
             ax.axvline(x=miss_time, color='red', linestyle='-', linewidth=2, alpha=0.7)
 
-    # Add task names on y-axis
     task_names = [row['Name'] for _, row in tasks.iterrows()]
     ax.set_yticks(range(len(task_names)))
     ax.set_yticklabels(task_names)
@@ -230,23 +223,16 @@ def draw_gantt(ax, events, tasks, title, time_limit, wcrts=None, deadline_misses
     ax.grid(axis='x', alpha=0.3)
 
 def main():
-    # Generate TC1 Gantt charts
-    print("Generating Gantt charts for TC1 and TC2...")
-
     tc1_df = pd.DataFrame(TC1_TASKS)
     tc2_df = pd.DataFrame(TC2_TASKS)
 
     H_tc1 = compute_hyperperiod(tc1_df['Period'].tolist())
     H_tc2 = compute_hyperperiod(tc2_df['Period'].tolist())
 
-    # TC1 DM
     tc1_dm_events = simulate_schedule_gantt(tc1_df, policy='DM', time_limit=H_tc1)
 
-    # TC1 EDF
     tc1_edf_events = simulate_schedule_gantt(tc1_df, policy='EDF', time_limit=H_tc1)
 
-    # TC2 DM and EDF
-    # TC2: show first two full cycles so the miss at t=7 is visible
     tc2_time_limit = min(H_tc2, 21)
     tc2_dm_events = simulate_schedule_gantt(tc2_df, policy='DM', time_limit=tc2_time_limit)
     tc2_edf_events = simulate_schedule_gantt(tc2_df, policy='EDF', time_limit=tc2_time_limit)
@@ -254,7 +240,6 @@ def main():
     tc1_desc = "tau_1(C=1,T=4,D=4), tau_2(C=2,T=6,D=6), tau_3(C=1,T=8,D=8)"
     tc2_desc = "tau_1(C=2,T=5,D=5), tau_2(C=4,T=7,D=7)"
 
-    # Create figures
     fig1, ax1 = plt.subplots(figsize=(10, 4))
     draw_gantt(
         ax1,
@@ -266,7 +251,6 @@ def main():
     )
     fig1.tight_layout()
     fig1.savefig('data/figures/fig1_tc1_dm_gantt.png', dpi=150, bbox_inches='tight')
-    print("saved fig1_tc1_dm_gantt.png")
     plt.close(fig1)
 
     fig2, ax2 = plt.subplots(figsize=(10, 4))
@@ -280,10 +264,8 @@ def main():
     )
     fig2.tight_layout()
     fig2.savefig('data/figures/fig2_tc1_edf_gantt.png', dpi=150, bbox_inches='tight')
-    print("saved fig2_tc1_edf_gantt.png")
     plt.close(fig2)
 
-    # TC2 comparison (DM vs EDF) — deadline miss at t=7 for tau_2
     fig3, (ax3a, ax3b) = plt.subplots(2, 1, figsize=(10, 6))
     draw_gantt(
         ax3a,
@@ -303,11 +285,8 @@ def main():
     )
     fig3.tight_layout()
     fig3.savefig('data/figures/fig3_tc2_comparison_gantt.png', dpi=150, bbox_inches='tight')
-    print("saved fig3_tc2_comparison_gantt.png")
     plt.close(fig3)
 
-    print("\nGantt charts generated successfully!")
-    print("Output directory: data/figures/")
 
 
 if __name__ == "__main__":
