@@ -10,6 +10,7 @@ Outputs:
 
 import pandas as pd
 import matplotlib.pyplot as plt
+import os
 from scheduler_analysis import compute_hyperperiod
 
 TC1_TASKS = {
@@ -223,6 +224,8 @@ def draw_gantt(ax, events, tasks, title, time_limit, wcrts=None, deadline_misses
     ax.grid(axis='x', alpha=0.3)
 
 def main():
+    os.makedirs('data/figures', exist_ok=True)
+
     tc1_df = pd.DataFrame(TC1_TASKS)
     tc2_df = pd.DataFrame(TC2_TASKS)
 

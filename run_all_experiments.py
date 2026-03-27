@@ -15,6 +15,7 @@ import visualizations
 
 def run_workflow(quick=False):
     os.makedirs('data', exist_ok=True)
+    os.makedirs('data/figures', exist_ok=True)
 
     print("Running main scheduler analysis...")
     tasks = pd.read_csv('task_sets/schedulable/Full_Utilization_NonUnique_Periods_taskset.csv')
