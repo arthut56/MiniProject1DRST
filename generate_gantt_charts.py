@@ -1,6 +1,6 @@
 #!/usr/bin/env python3
 """
-Generate Gantt charts for TC1 and TC2 as per report specification.
+Generate Gantt charts for TC1 and TC2.
 
 Outputs:
 - fig1_tc1_dm_gantt.png: DM schedule for TC1
@@ -13,7 +13,7 @@ import matplotlib.pyplot as plt
 from scheduler_analysis import compute_hyperperiod
 
 # Create task sets for TC1 and TC2
-# TC1: spec §8.2 — U<0.69, D_i=T_i, both schedulable
+# TC1: U<0.69, D_i=T_i, both schedulable
 TC1_TASKS = {
     'Name': ['tau_1', 'tau_2', 'tau_3'],
     'BCET': [1, 2, 1],
@@ -22,7 +22,7 @@ TC1_TASKS = {
     'Deadline': [4, 6, 8],
 }
 
-# TC2: spec §8.2 — U=0.971, EDF schedulable, DM infeasible
+# TC2: U=0.971, EDF schedulable, DM infeasible
 TC2_TASKS = {
     'Name': ['tau_1', 'tau_2'],
     'BCET': [2, 4],

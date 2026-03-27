@@ -723,7 +723,7 @@ def analyze_task_set(tasks: pd.DataFrame, num_sim_runs: int = 100,
     print("   Running EDF simulation (WCET)...")
     edf_sim = simulate_schedule(tasks, policy="EDF", use_wcet=True, max_sim_time=sim_time)
 
-    # Stochastic simulation statistics (spec Part 7)
+    # Stochastic simulation statistics
     print(f"\n   Running stochastic simulations ({num_sim_runs} runs, Uniform[BCET, WCET])...")
     dm_stochastic = run_stochastic_simulation_stats(tasks, "DM", num_sim_runs, sim_time, seed)
     edf_stochastic = run_stochastic_simulation_stats(tasks, "EDF", num_sim_runs, sim_time, seed)

@@ -53,8 +53,8 @@ def _build_arj_taskset(target_utilization: float) -> pd.DataFrame:
         "Period": periods,
         "Deadline": periods,
     })
-def _spec_tc1() -> pd.DataFrame:
-    """Spec TC1: U=0.708, both DM and EDF schedulable (§8.2)."""
+def _tc1() -> pd.DataFrame:
+    """TC1: U=0.708, both DM and EDF schedulable."""
     return pd.DataFrame([
         {"Name": "tau_1", "BCET": 1, "WCET": 1, "Period": 4, "Deadline": 4},
         {"Name": "tau_2", "BCET": 2, "WCET": 2, "Period": 6, "Deadline": 6},
@@ -63,10 +63,10 @@ def _spec_tc1() -> pd.DataFrame:
 
 
 def plot_wcrt_tc1_tc5(output_file=None):
-    """Figure 5: per-task WCRT comparison (DM vs EDF) for spec TC1 and TC5."""
+    """Figure 5: per-task WCRT comparison (DM vs EDF) for TC1 and TC5."""
     from scheduler_analysis import dm_rta, edf_wcrt_schedule_construction
 
-    tc1 = _spec_tc1()
+    tc1 = _tc1()
     tc5 = _tc5_taskset()
 
     tc1_dm, _ = dm_rta(tc1)
@@ -174,7 +174,7 @@ def plot_preemptions(results_df, output_file=None):
 
 
 def _tc5_taskset() -> pd.DataFrame:
-    """Return the TC5 task set from the report specification."""
+    """Return the TC5 task set."""
     return pd.DataFrame([
         {"Name": "tau_1", "BCET": 1, "WCET": 2, "Period": 10, "Deadline": 10},
         {"Name": "tau_2", "BCET": 1, "WCET": 2, "Period": 20, "Deadline": 20},
@@ -307,7 +307,7 @@ def generate_all_plots(analysis_csv='data/analysis_results.csv',
     print("=" * 70)
     print("GENERATING VISUALIZATIONS")
     print("=" * 70)
-    # Fig5: WCRT comparison for spec TC1 and TC5 (always generated analytically)
+    # Fig5: WCRT comparison for TC1 and TC5 (always generated analytically)
     plot_wcrt_tc1_tc5(os.path.join(output_dir, 'fig5_wcrt_comparison.png'))
 
     if os.path.exists(analysis_csv):
@@ -324,7 +324,7 @@ def generate_all_plots(analysis_csv='data/analysis_results.csv',
     elif sweep_csv:
         print("Warning: sweep summary CSV not found; skipping fraction schedulable plot")
 
-    # figures required by report spec with fallback placeholders if heavy steps fail
+    # figures with fallback placeholders if heavy steps fail
     fig8_path = os.path.join(output_dir, 'fig8_tc5_rt_boxplot.png')
     fig9_path = os.path.join(output_dir, 'fig9_arj_u07_u08_u09.png')
 
