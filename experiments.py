@@ -1,8 +1,5 @@
 """
-Spec Experiments: Utilization Sweep and Comparison Workflow
-============================================================
-
-Implements the required comparison methodology for utilization-based DM/EDF comparison:
+Utilization Sweep and Comparison Workflow
 - Generate task sets with varying utilization U ∈ {0.5, 0.6, 0.7, 0.75, 0.8, 0.85, 0.9, 0.95, 1.0}
 - For each U, generate N=500 random task sets using UUniFast
 - Run DM RTA and EDF PDC on each
@@ -91,11 +88,13 @@ def generate_taskset(n_tasks: int, U: float, seed: int = None) -> pd.DataFrame:
     
     df = pd.DataFrame(tasks_data)
     
-    # verify/adjust utilization to be close to target
+    # verify/adjust utilization: any overshoot above 1.0 must be corrected so
+    # that EDF (which is N&S feasible iff U<=1 for implicit deadlines) is not
+    # incorrectly declared infeasible due to integer-rounding artefacts.
     actual_u = compute_utilization(df)
-    if actual_u > 1.01:  # allow small overshoot
-        # scale down WCETs proportionally
-        scale_factor = U / actual_u
+    if actual_u > 1.0:
+        # Scale WCETs down so actual_u just fits below 1.0
+        scale_factor = (min(U, 0.999)) / actual_u
         df['WCET'] = (df['WCET'] * scale_factor).astype(int)
         df['WCET'] = df['WCET'].clip(lower=1)
     

@@ -53,6 +53,15 @@ def test_task_set(csv_path: str) -> dict:
     dm_misses = sum(dm_sim['deadline_misses'].values())
     edf_misses = sum(edf_sim['deadline_misses'].values())
 
+    if (not dm_ok) and edf_ok:
+        policy_classification = 'dm_only_unschedulable'
+    elif (not dm_ok) and (not edf_ok):
+        policy_classification = 'unschedulable_both'
+    elif dm_ok and edf_ok:
+        policy_classification = 'schedulable_both'
+    else:
+        policy_classification = 'dm_only_schedulable'
+
     return {
         'file': os.path.basename(csv_path),
         'num_tasks': n,
@@ -65,7 +74,8 @@ def test_task_set(csv_path: str) -> dict:
         'dm_sim_misses': dm_misses,
         'edf_sim_misses': edf_misses,
         'dm_preemptions': sum(dm_sim['preemptions'].values()),
-        'edf_preemptions': sum(edf_sim['preemptions'].values())
+        'edf_preemptions': sum(edf_sim['preemptions'].values()),
+        'policy_classification': policy_classification,
     }
 
 
@@ -112,8 +122,8 @@ def test_all_tasksets(base_dir: str = 'task_sets') -> pd.DataFrame:
 
                 # Print summary
                 print(f"   Tasks: {result['num_tasks']}, U: {result['utilization']:.4f}")
-                print(f"   DM analytical: {'✓' if result['dm_schedulable'] else '✗'}")
-                print(f"   EDF analytical: {'✓' if result['edf_feasible'] else '✗'}")
+                print(f"   DM analytical: {result['dm_schedulable']}")
+                print(f"   EDF analytical: {result['edf_feasible']}")
                 print(f"   DM sim misses: {result['dm_sim_misses']}, EDF sim misses: {result['edf_sim_misses']}")
 
             except Exception as e:
@@ -158,6 +168,12 @@ def print_summary(results_df: pd.DataFrame):
         print(f"   EDF analytically schedulable: {edf_sched}/{len(cat_results)}")
         print(f"   DM verdict consistent with WCET simulation: {dm_consistent}/{len(cat_results)}")
         print(f"   EDF verdict consistent with WCET simulation: {edf_consistent}/{len(cat_results)}")
+
+        if 'policy_classification' in cat_results:
+            dm_only_unsched = (cat_results['policy_classification'] == 'dm_only_unschedulable').sum()
+            both_unsched = (cat_results['policy_classification'] == 'unschedulable_both').sum()
+            print(f"   DM-only unschedulable: {dm_only_unsched}/{len(cat_results)}")
+            print(f"   Unschedulable under both DM and EDF: {both_unsched}/{len(cat_results)}")
 
         # Show utilization range
         print(f"   Utilization range: {cat_results['utilization'].min():.4f} - {cat_results['utilization'].max():.4f}")

@@ -72,8 +72,9 @@ def dm_rta(tasks: pd.DataFrame) -> Tuple[pd.DataFrame, Tuple[bool, str]]:
     """
     tasks = tasks.copy().reset_index(drop=True)
 
-    # Sort by non-decreasing deadline (DM priority order)
-    tasks = tasks.sort_values(by="Deadline").reset_index(drop=True)
+    # Tie-break equal deadlines by original task index for deterministic DM priority.
+    tasks["_orig_idx"] = tasks.index
+    tasks = tasks.sort_values(by=["Deadline", "_orig_idx"]).reset_index(drop=True)
 
     n = len(tasks)
     wcrts = []
@@ -101,6 +102,7 @@ def dm_rta(tasks: pd.DataFrame) -> Tuple[pd.DataFrame, Tuple[bool, str]]:
             # Check for deadline miss
             if R > Di:
                 tasks["Ri_DM"] = wcrts + ["UNFEASIBLE"] * (n - i)
+                tasks = tasks.drop(columns=["_orig_idx"])
                 return tasks, (False, f"Task {tasks.loc[i, 'Name']} misses deadline: R={R} > D={Di}")
 
             # Check for convergence
@@ -110,6 +112,7 @@ def dm_rta(tasks: pd.DataFrame) -> Tuple[pd.DataFrame, Tuple[bool, str]]:
         wcrts.append(R)
 
     tasks["Ri_DM"] = wcrts
+    tasks = tasks.drop(columns=["_orig_idx"])
     return tasks, (True, "All tasks schedulable under DM")
 
 
@@ -344,7 +347,7 @@ def edf_wcrt_schedule_construction(tasks: pd.DataFrame) -> Tuple[pd.DataFrame, T
 def run_stochastic_simulation_stats(tasks: pd.DataFrame, policy: str,
                                     num_runs: int, sim_time: int,
                                     seed: int = 42) -> Dict[str, Any]:
-    """Aggregate observed max/mean response times across stochastic runs."""
+    """Aggregate observed max/mean/p95 response times across stochastic runs."""
     n = len(tasks)
     all_rts = {i: [] for i in range(n)}
     observed_max = {i: 0 for i in range(n)}
@@ -371,10 +374,15 @@ def run_stochastic_simulation_stats(tasks: pd.DataFrame, policy: str,
         i: (float(np.mean(all_rts[i])) if all_rts[i] else None)
         for i in range(n)
     }
+    p95_rt = {
+        i: (float(np.percentile(all_rts[i], 95)) if all_rts[i] else None)
+        for i in range(n)
+    }
 
     return {
         'observed_max_rt': observed_max,
         'observed_mean_rt': mean_rt,
+        'observed_p95_rt': p95_rt,
         'total_deadline_misses': total_deadline_misses,
         'num_runs': num_runs,
     }
@@ -451,7 +459,7 @@ class DiscreteEventSimulator:
         # DM priorities (lower = higher priority, by deadline)
         if policy == "DM":
             deadlines = [self.task_params[i]['D'] for i in range(self.n)]
-            sorted_indices = sorted(range(self.n), key=lambda i: deadlines[i])
+            sorted_indices = sorted(range(self.n), key=lambda i: (deadlines[i], i))
             self.dm_priority = {idx: rank for rank, idx in enumerate(sorted_indices)}
 
     def sample_execution_time(self, task_id: int) -> int:
@@ -466,13 +474,13 @@ class DiscreteEventSimulator:
         """
         Get priority tuple for job ordering (lower = higher priority).
 
-        For DM: (dm_priority[task_id], release_time)
-        For EDF: (absolute_deadline, release_time)
+        For DM: (dm_priority[task_id], task_id, job_id)
+        For EDF: (absolute_deadline, task_id, job_id)
         """
         if self.policy == "DM":
-            return (self.dm_priority[job.task_id], job.release_time)
+            return (self.dm_priority[job.task_id], job.task_id, job.job_id)
         else:  # EDF
-            return (job.absolute_deadline, job.release_time)
+            return (job.absolute_deadline, job.task_id, job.job_id)
 
     def run(self, simulation_time: int) -> Dict[str, Any]:
         """
@@ -486,12 +494,21 @@ class DiscreteEventSimulator:
             - 'preemptions': {task_id: total_preemptions}
             - 'completed_jobs': list of all completed SimJob
         """
-        # Initialize state
+        # Build all job releases in [0, simulation_time)
+        releases = []
+        for task_id in range(self.n):
+            T = self.task_params[task_id]['T']
+            job_id = 0
+            while job_id * T < simulation_time:
+                releases.append((job_id * T, task_id, job_id))
+                job_id += 1
+        releases.sort()
+
         current_time = 0
-        event_queue = []  # Min-heap of (time, event_type_value, task_id, job_id)
-        ready_queue = []  # List of SimJob, managed manually
+        ready_queue: List[SimJob] = []
         running_job: Optional[SimJob] = None
         jobs_by_id: Dict[Tuple[int, int], SimJob] = {}
+        release_index = 0
 
         # Results
         response_times = {i: [] for i in range(self.n)}
@@ -499,101 +516,69 @@ class DiscreteEventSimulator:
         preemptions = {i: 0 for i in range(self.n)}
         completed_jobs = []
 
-        # Schedule initial releases (all at time 0 for synchronous release)
-        for i in range(self.n):
-            heapq.heappush(event_queue, (0, EventType.RELEASE.value, i, 0))
+        while release_index < len(releases) or ready_queue or running_job is not None:
+            next_release = releases[release_index][0] if release_index < len(releases) else float('inf')
+            next_completion = (
+                current_time + running_job.remaining_time
+                if running_job is not None else float('inf')
+            )
+            next_event_time = min(next_release, next_completion)
 
-        while event_queue and current_time <= simulation_time:
-            event_time, event_type_val, task_id, job_id = heapq.heappop(event_queue)
+            if next_event_time == float('inf'):
+                break
 
-            # Execute running job up to event time
-            if running_job is not None and event_time > current_time:
-                exec_time = event_time - current_time
-                running_job.remaining_time -= exec_time
+            if running_job is not None and next_event_time > current_time:
+                running_job.remaining_time -= (next_event_time - current_time)
 
-            current_time = event_time
+            current_time = int(next_event_time)
 
-            if event_type_val == EventType.RELEASE.value:
-                # Create new job
-                T = self.task_params[task_id]['T']
+            if running_job is not None and running_job.remaining_time == 0:
+                running_job.finish_time = current_time
+                R = running_job.finish_time - running_job.release_time
+                response_times[running_job.task_id].append(R)
+                completed_jobs.append(running_job)
+                if R > self.task_params[running_job.task_id]['D']:
+                    deadline_misses[running_job.task_id] += 1
+                running_job = None
+
+            while release_index < len(releases) and releases[release_index][0] == current_time:
+                _, task_id, job_id = releases[release_index]
                 D = self.task_params[task_id]['D']
                 exec_time = self.sample_execution_time(task_id)
-
                 job = SimJob(
                     task_id=task_id,
                     job_id=job_id,
                     release_time=current_time,
                     absolute_deadline=current_time + D,
                     execution_time=exec_time,
-                    remaining_time=exec_time
+                    remaining_time=exec_time,
                 )
                 jobs_by_id[(task_id, job_id)] = job
                 ready_queue.append(job)
+                release_index += 1
 
-                # Schedule next release
-                next_release = current_time + T
-                if next_release <= simulation_time:
-                    heapq.heappush(event_queue, (next_release, EventType.RELEASE.value, task_id, job_id + 1))
+            candidates = ready_queue.copy()
+            if running_job is not None:
+                candidates.append(running_job)
 
-                # Check for preemption
-                if running_job is not None:
-                    job_priority = self.get_priority(job)
-                    running_priority = self.get_priority(running_job)
-                    if job_priority < running_priority:
-                        # Preempt running job
-                        running_job.preemption_count += 1
-                        preemptions[running_job.task_id] += 1
-                        running_job = None
+            if not candidates:
+                continue
 
-            elif event_type_val == EventType.COMPLETE.value:
-                # Job completion
-                job = jobs_by_id.get((task_id, job_id))
-                if job is not None and job.remaining_time == 0:
-                    job.finish_time = current_time
-                    R = job.finish_time - job.release_time
-                    response_times[task_id].append(R)
-                    completed_jobs.append(job)
+            candidates.sort(key=lambda j: self.get_priority(j))
+            next_job = candidates[0]
 
-                    if R > self.task_params[task_id]['D']:
-                        deadline_misses[task_id] += 1
+            if running_job is not None and next_job is not running_job:
+                running_job.preemption_count += 1
+                preemptions[running_job.task_id] += 1
+                ready_queue.append(running_job)
+                running_job = None
 
-                    # Remove from ready queue
-                    ready_queue = [j for j in ready_queue if j is not job]
+            if next_job in ready_queue:
+                ready_queue.remove(next_job)
+            running_job = next_job
+            if running_job.start_time is None:
+                running_job.start_time = current_time
 
-                    if running_job is job:
-                        running_job = None
-
-            # Select next job to run
-            if ready_queue:
-                ready_queue.sort(key=lambda j: self.get_priority(j))
-                next_job = ready_queue[0]
-
-                if running_job is None:
-                    running_job = next_job
-                    if running_job.start_time is None:
-                        running_job.start_time = current_time
-
-                    # Schedule completion
-                    finish_time = current_time + running_job.remaining_time
-                    heapq.heappush(event_queue,
-                                   (finish_time, EventType.COMPLETE.value,
-                                    running_job.task_id, running_job.job_id))
-
-                elif next_job is not running_job:
-                    # Check if we need to switch
-                    if self.get_priority(next_job) < self.get_priority(running_job):
-                        # Preempt and switch
-                        running_job.preemption_count += 1
-                        preemptions[running_job.task_id] += 1
-                        running_job = next_job
-                        if running_job.start_time is None:
-                            running_job.start_time = current_time
-
-                        # Schedule completion
-                        finish_time = current_time + running_job.remaining_time
-                        heapq.heappush(event_queue,
-                                       (finish_time, EventType.COMPLETE.value,
-                                        running_job.task_id, running_job.job_id))
 
         # Compute max response times
         max_response_times = {}
@@ -750,6 +735,8 @@ def analyze_task_set(tasks: pd.DataFrame, num_sim_runs: int = 100,
     results_df["Ri_EDF_obs_max"] = [edf_stochastic['observed_max_rt'].get(i, None) for i in range(n)]
     results_df["Ri_DM_obs_mean"] = [dm_stochastic['observed_mean_rt'].get(i, None) for i in range(n)]
     results_df["Ri_EDF_obs_mean"] = [edf_stochastic['observed_mean_rt'].get(i, None) for i in range(n)]
+    results_df["Ri_DM_obs_p95"] = [dm_stochastic['observed_p95_rt'].get(i, None) for i in range(n)]
+    results_df["Ri_EDF_obs_p95"] = [edf_stochastic['observed_p95_rt'].get(i, None) for i in range(n)]
     results_df["DM_obs_within_ana"] = [
         (results_df.loc[i, "Ri_DM_obs_max"] <= results_df.loc[i, "Ri_DM"])
         if isinstance(results_df.loc[i, "Ri_DM"], (int, np.integer)) and results_df.loc[i, "Ri_DM_obs_max"] is not None
@@ -783,17 +770,17 @@ def analyze_task_set(tasks: pd.DataFrame, num_sim_runs: int = 100,
         edf_sim_val = row['Ri_EDF_sim']
 
         # Check if analytical matches simulation
-        dm_match = "✓" if (dm_ana == dm_sim_val or (isinstance(dm_ana, str) and dm_ana == "UNFEASIBLE")) else "✗"
+        dm_match = "PASS" if (dm_ana == dm_sim_val or (isinstance(dm_ana, str) and dm_ana == "UNFEASIBLE")) else "FAIL"
         if isinstance(edf_ana, str) and edf_ana == "NOT_COMPUTED":
             edf_match = "N/A"
         else:
-            edf_match = "✓" if (edf_ana == edf_sim_val or (isinstance(edf_ana, str) and edf_ana == "UNFEASIBLE")) else "✗"
+            edf_match = "PASS" if (edf_ana == edf_sim_val or (isinstance(edf_ana, str) and edf_ana == "UNFEASIBLE")) else "FAIL"
 
-        if dm_match == "✓":
+        if dm_match == "PASS":
             dm_matches += 1
         if edf_match != "N/A":
             edf_comparable += 1
-        if edf_match == "✓":
+        if edf_match == "PASS":
             edf_matches += 1
 
         print(f"   {name:<8} {Di:<6} {str(dm_ana):<8} {str(dm_sim_val):<8} {dm_match:<6} {str(edf_ana):<8} {str(edf_sim_val):<8} {edf_match:<6}")

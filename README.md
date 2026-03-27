@@ -1,6 +1,6 @@
 # MiniProject1DRST
 
-Canonical implementation: `scheduler_analysis.py`.
+Scheduler analysis for DM/EDF: analytical WCRT, schedulability checks, simulation, and comparison utilities.
 
 ## Setup
 
@@ -8,54 +8,49 @@ Canonical implementation: `scheduler_analysis.py`.
 python3 -m pip install -r requirements.txt
 ```
 
+## Quick Start (recommended)
 
-## Quick Run
+Runs analysis, batch validation, and plotting (no utilization sweep).
 
 ```bash
-python3 -m py_compile scheduler_analysis.py test_all_tasksets.py
+python3 run_all_experiments.py --quick
+```
+
+Outputs:
+- `data/analysis_results.csv`
+- `data/all_tasksets_results.csv`
+- `data/figures/fig*.png`
+
+## Full Workflow
+
+Includes the utilization sweep (large: 500 samples per U-level) and all plots.
+
+```bash
+python3 run_all_experiments.py
+```
+
+## Individual Components
+
+```bash
+# Batch validation of provided task sets
 python3 test_all_tasksets.py
+
+# Main analysis on the default task set
 python3 scheduler_analysis.py
+
+# Utilization sweep only (writes data/utilization_sweep_results.csv)
+python3 experiments.py
+
+# Plot generation only (expects prior CSVs in data/)
+python3 visualizations.py
 ```
 
-## Repository Contents
+## Layout
 
-- `scheduler_analysis.py`: analytical and simulation toolchain
-- `test_all_tasksets.py`: batch validation on `task_sets/`
-- `task_sets/`: provided test scenarios
-- `data/`: generated result CSV files
-- `report/`: LaTeX report sources (`main.tex`, `references.bib`)
-- `run_generated_experiments.py`: generator + analysis batch runner
-
-## Generate and Evaluate New Task Sets
-
-```bash
-python3 run_generated_experiments.py \
-  --generator-dir real-time-task-generators \
-  --output-dir task_sets/generated \
-  --results-file data/generated_experiment_results.csv \
-  --utilizations 20,50,80 \
-  --num-tasks 10,20 \
-  --generator-ids 1 \
-  --sets-per-config 2
-```
-
-If task sets are already generated, analyze only existing files:
-
-```bash
-python3 run_generated_experiments.py \
-  --skip-generate \
-  --output-dir task_sets/generated \
-  --glob "*.csv" \
-  --results-file data/generated_experiment_results.csv
-```
-
-## Build the PDF Report
-
-```bash
-cd report
-pdflatex main.tex
-bibtex main
-pdflatex main.tex
-pdflatex main.tex
-```
-
+- `scheduler_analysis.py` – core DM/EDF analysis + simulation
+- `test_all_tasksets.py` – batch validation over `task_sets/`
+- `experiments.py` – utilization sweep generation and aggregation
+- `visualizations.py` – plot generation to `data/figures/`
+- `run_all_experiments.py` – orchestration (quick/full modes)
+- `data/` – analysis CSVs and generated figures
+- `task_sets/` – provided schedulable/unschedulable sets
