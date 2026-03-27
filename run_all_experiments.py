@@ -27,10 +27,10 @@ def run_workflow(quick=False):
     results_df.to_csv('data/all_tasksets_results.csv', index=False)
     
     if not quick:
-        print("Running utilization sweep...")
+        print("Running utilization sweep... (This may take a minute or two)")
         sweep_results = experiments.run_utilization_sweep(
             utilization_levels=[0.5, 0.6, 0.7, 0.75, 0.8, 0.85, 0.9, 0.95, 1.0],
-            samples_per_level=500,
+            samples_per_level=400,
             n_tasks=None,
             tasksets_dir='task_sets/generated/sweep',
             output_dir='data',
