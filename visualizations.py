@@ -149,7 +149,15 @@ def plot_preemptions(results_df, output_file=None):
     return _save_or_return(fig, output_file)
 
 
-def _tc5_boxplot_taskset() -> pd.DataFrame:
+def _cd_boxplot_taskset() -> pd.DataFrame:
+    """Load the constrained-deadline task set used for the Figure 8 boxplot.
+
+    This is a separate, constrained-deadline task set (D_i < T_i for several
+    tasks).  It is deliberately distinct from the TC5 task set defined in
+    Table 5 of the report (which has D_i = T_i for every task).  Do not
+    confuse the two: this function returns the *constrained-deadline* variant
+    used only for the response-time distribution plot.
+    """
     return _require_plot_taskset(REPORT_PLOT_TASKSETS["fig8"])
 
 
@@ -178,7 +186,7 @@ def _collect_stochastic_response_times(tasks: pd.DataFrame, policy: str,
 
 def _build_fig8_samples_df() -> pd.DataFrame:
     """Build long-format samples for Figure 8 and persist as CSV upstream."""
-    tasks = _tc5_boxplot_taskset()
+    tasks = _cd_boxplot_taskset()
     dm_samples = _collect_stochastic_response_times(tasks, "DM")
     edf_samples = _collect_stochastic_response_times(tasks, "EDF")
 
@@ -284,7 +292,7 @@ def plot_response_time_boxplots_tc5(fig8_df: pd.DataFrame, output_file=None):
     ax.set_xticklabels(task_names)
     ax.set_xlabel("Task", fontsize=12, fontweight="bold")
     ax.set_ylabel("Response Time (time units)", fontsize=12, fontweight="bold")
-    ax.set_title("TC5 (Constrained-Deadline) Response-Time Distributions: DM vs EDF", fontsize=13, fontweight="bold")
+    ax.set_title("Constrained-Deadline Task Set: Response-Time Distributions (DM vs EDF)", fontsize=13, fontweight="bold")
     ax.grid(axis="y", alpha=0.3)
     legend_handles = [
         Patch(facecolor="#e74c3c", edgecolor="black", alpha=0.5, label="DM"),

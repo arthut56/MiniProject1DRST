@@ -7,6 +7,7 @@ from dataclasses import dataclass, field
 from typing import List, Tuple, Dict, Optional, Any
 from enum import Enum
 import random
+from scipy.stats import truncnorm
 
 
 MAX_EXACT_HYPERPERIOD = 10**7
@@ -34,14 +35,23 @@ def dm_rta(tasks: pd.DataFrame) -> Tuple[pd.DataFrame, Tuple[bool, str]]:
     Deadline Monotonic Response Time Analysis (RTA).
 
     Computes worst-case response times for each task under DM scheduling.
-    Tasks are prioritized by increasing relative deadlines.
+    Tasks are prioritized by increasing relative deadline; ties broken by
+    original task index (smaller index = higher priority).
 
-    Algorithm (Buttazzo Fig. 4.17):
-    1. Sort tasks by non-decreasing D_i (DM priority order)
+    Algorithm (Audsley et al. 1993; Buttazzo Fig. 4.17):
+    1. Sort tasks by non-decreasing D_i, breaking ties by original index.
     2. For each task i, compute R_i iteratively:
        R_i^(0) = C_i
-       R_i^(s) = C_i + sum_{h<i} ceil(R_i^(s-1) / T_h) * C_h
-       Stop when converged or R_i > D_i (deadline miss)
+       R_i^(s) = C_i + sum_{j in hp(i)} ceil(R_i^(s-1) / T_j) * C_j
+       where hp(i) is the set of tasks with strictly higher DM priority,
+       i.e. D_j < D_i, OR (D_j == D_i AND orig_index_j < orig_index_i).
+       Stop when converged or R_i > D_i (deadline miss).
+
+    Note on equal-deadline tasks: the standard formula uses D_j < D_i
+    (strict inequality), which would omit interference from tasks that share
+    the same relative deadline but have higher priority under the tie-breaking
+    rule.  By sorting on (D_i, original_index) and summing over h < i, we
+    correctly include those same-deadline, higher-priority tasks.
 
     Returns:
         tasks: DataFrame with added "Ri_DM" column
@@ -66,7 +76,11 @@ def dm_rta(tasks: pd.DataFrame) -> Tuple[pd.DataFrame, Tuple[bool, str]]:
         for iteration in range(max_iterations):
             R_old = R
 
-            # compute interference from higher-priority tasks (h < i)
+            # Interference from all tasks with strictly higher DM priority.
+            # After sorting by (Deadline, orig_idx), every task h < i has
+            # either D_h < D_i, or D_h == D_i with a smaller original index
+            # (i.e. higher tie-break priority).  Both cases contribute
+            # preemption interference.
             I = 0
             for h in range(i):
                 Ch = int(tasks.loc[h, "WCET"])
@@ -230,7 +244,11 @@ def edf_wcrt_schedule_construction(tasks: pd.DataFrame) -> Tuple[pd.DataFrame, T
         tasks["Ri_EDF"] = ["NOT_COMPUTED"] * n
         return tasks, (False, f"Hyperperiod H={H} exceeds exact-analysis cap {MAX_EXACT_HYPERPERIOD}")
 
-    #generate all jobs released in [0, H)
+    # Generate all jobs released in [0, H).  Jobs whose release time is near H
+    # may not complete until after H; the simulation loop below runs until every
+    # released job finishes, so their finish times are recorded correctly and
+    # included in the WCRT max.  Terminating at exactly H would miss those
+    # completion times and could under-estimate the WCRT.
     jobs = []
     for i in range(n):
         Ti = int(tasks.loc[i, "Period"])
@@ -321,12 +339,25 @@ def edf_wcrt_schedule_construction(tasks: pd.DataFrame) -> Tuple[pd.DataFrame, T
 
 def run_stochastic_simulation_stats(tasks: pd.DataFrame, policy: str,
                                     num_runs: int, sim_time: int,
-                                    seed: int = 42) -> Dict[str, Any]:
-    """Aggregate observed max/mean/p95 response times across stochastic runs."""
+                                    seed: int = 42,
+                                    convergence_patience: int = 10) -> Dict[str, Any]:
+    """Aggregate observed max/mean/p95 response times across stochastic runs.
+
+    Stopping condition:
+    The simulation always runs for at least ``num_runs`` independent runs.
+    Additionally, early termination is applied: if no task's observed maximum
+    response time has improved for ``convergence_patience`` consecutive runs,
+    we conclude that additional runs are unlikely to discover a new worst case
+    and stop early.  This provides an analytically-motivated bound: once the
+    empirical maxima have stabilised over an interval of
+    ``convergence_patience`` hyperperiods, further sampling yields diminishing
+    returns.
+    """
     n = len(tasks)
     all_rts = {i: [] for i in range(n)}
     observed_max = {i: 0 for i in range(n)}
     total_deadline_misses = 0
+    no_improvement_streak = 0
 
     for run in range(num_runs):
         sim = simulate_schedule(
@@ -337,13 +368,24 @@ def run_stochastic_simulation_stats(tasks: pd.DataFrame, policy: str,
             seed=seed + run,
         )
 
+        improved = False
         for i in range(n):
             rts = sim['response_times'].get(i, [])
             all_rts[i].extend(rts)
             if rts:
-                observed_max[i] = max(observed_max[i], max(rts))
+                new_max = max(rts)
+                if new_max > observed_max[i]:
+                    observed_max[i] = new_max
+                    improved = True
 
         total_deadline_misses += sum(sim['deadline_misses'].values())
+
+        if improved:
+            no_improvement_streak = 0
+        else:
+            no_improvement_streak += 1
+            if no_improvement_streak >= convergence_patience:
+                break
 
     mean_rt = {
         i: (float(np.mean(all_rts[i])) if all_rts[i] else None)
@@ -359,7 +401,7 @@ def run_stochastic_simulation_stats(tasks: pd.DataFrame, policy: str,
         'observed_mean_rt': mean_rt,
         'observed_p95_rt': p95_rt,
         'total_deadline_misses': total_deadline_misses,
-        'num_runs': num_runs,
+        'num_runs': run + 1,  # actual runs executed
     }
 
 
@@ -434,12 +476,35 @@ class DiscreteEventSimulator:
             sorted_indices = sorted(range(self.n), key=lambda i: (deadlines[i], i))
             self.dm_priority = {idx: rank for rank, idx in enumerate(sorted_indices)}
 
-    def sample_execution_time(self, task_id: int) -> int:
-        """Sample execution time from [BCET, WCET] uniformly."""
+    def sample_execution_time(self, task_id: int,
+                               distribution: str = "truncnorm") -> int:
+        """Sample execution time from [BCET, WCET].
+
+        Args:
+            distribution: "uniform"   – draw uniformly from [BCET, WCET].
+                          "truncnorm" – draw from a truncated normal whose
+                                        mean is the midpoint and whose sigma
+                                        is chosen so that most mass sits near
+                                        the average (sigma = range / 4).
+                                        This is more realistic than uniform
+                                        because real execution times cluster
+                                        around their average rather than being
+                                        flat across the whole range.
+        """
         if self.use_wcet:
             return self.task_params[task_id]['C']
         B = self.task_params[task_id]['B']
         C = self.task_params[task_id]['C']
+        if B == C:
+            return C
+        if distribution == "truncnorm":
+            mu = (B + C) / 2.0
+            sigma = (C - B) / 4.0
+            a, b = (B - mu) / sigma, (C - mu) / sigma
+            sample = truncnorm.rvs(a, b, loc=mu, scale=sigma,
+                                   random_state=self.rng.randint(0, 2**31))
+            return int(round(min(C, max(B, sample))))
+        # default: uniform
         return self.rng.randint(B, C)
 
     def get_priority(self, job: SimJob) -> Tuple:

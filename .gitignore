@@ -1,7 +1,6 @@
 .idea/
 .venv/
-.DRTS_miniproject1_spec.md
+.pytest_cache/
 __pycache__/
 *.pyc
-real-time-task-generators/
 non_source/

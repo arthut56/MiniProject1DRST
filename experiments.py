@@ -181,6 +181,88 @@ def compute_fraction_schedulable(results_df: pd.DataFrame) -> pd.DataFrame:
     return pd.DataFrame(summary)
 
 
+def run_overload_deadline_miss_analysis(
+    overload_utilization: float = 1.05,
+    n_tasksets: int = 100,
+    n_tasks: int = 6,
+    sim_hyperperiods: int = 4,
+    max_sim_time: int = 50_000,
+    seed: int = 0,
+    output_dir: str = 'data',
+    verbose: bool = False,
+) -> pd.DataFrame:
+    """
+    Analyse deadline miss distributions under slight overload (U > 1).
+
+    Generates random constrained-deadline task sets at the given utilization,
+    runs stochastic simulations under both DM and EDF, and reports how misses
+    are distributed across priority levels.  This illustrates the difference
+    between EDF's balanced degradation and DM's low-priority starvation.
+
+    Args:
+        max_sim_time: Hard cap on simulation time to prevent very-large-H task
+                      sets from hanging.  Default is 50 000 time units.
+
+    Returns:
+        DataFrame with per-task miss counts and fractions under DM and EDF.
+    """
+    from scheduler_analysis import simulate_schedule, compute_hyperperiod
+
+    log = print if verbose else (lambda *args, **kwargs: None)
+    log(f"\nOverload analysis at U={overload_utilization:.2f} "
+        f"({n_tasksets} task sets, {n_tasks} tasks each)")
+
+    rows = []
+
+    for sample in range(n_tasksets):
+        try:
+            taskset = uunifast.generate_constrained_taskset(n_tasks, overload_utilization)
+            H = compute_hyperperiod(taskset["Period"].tolist())
+            sim_time = min(H * sim_hyperperiods, max_sim_time)
+
+            dm_sim = simulate_schedule(taskset, policy="DM", use_wcet=False,
+                                       max_sim_time=sim_time, seed=seed + sample)
+            edf_sim = simulate_schedule(taskset, policy="EDF", use_wcet=False,
+                                        max_sim_time=sim_time, seed=seed + sample)
+
+            # Sort tasks by DM priority (ascending deadline)
+            task_deadlines = taskset["Deadline"].tolist()
+            priority_order = sorted(range(n_tasks), key=lambda i: (task_deadlines[i], i))
+
+            dm_total = sum(dm_sim['deadline_misses'].values()) or 1
+            edf_total = sum(edf_sim['deadline_misses'].values()) or 1
+
+            for rank, task_id in enumerate(priority_order):
+                rows.append({
+                    'sample': sample,
+                    'priority_rank': rank,           # 0 = highest DM priority
+                    'task_id': task_id,
+                    'deadline': task_deadlines[task_id],
+                    'dm_misses': dm_sim['deadline_misses'].get(task_id, 0),
+                    'edf_misses': edf_sim['deadline_misses'].get(task_id, 0),
+                    'dm_miss_fraction': dm_sim['deadline_misses'].get(task_id, 0) / dm_total,
+                    'edf_miss_fraction': edf_sim['deadline_misses'].get(task_id, 0) / edf_total,
+                })
+        except Exception as e:
+            log(f"  Sample {sample} failed: {e}")
+
+    results_df = pd.DataFrame(rows)
+
+    os.makedirs(output_dir, exist_ok=True)
+    out_path = os.path.join(output_dir, 'overload_deadline_misses.csv')
+    results_df.to_csv(out_path, index=False)
+    log(f"Saved to {out_path}")
+
+    if not results_df.empty:
+        summary = results_df.groupby('priority_rank')[
+            ['dm_miss_fraction', 'edf_miss_fraction']
+        ].mean()
+        log("\nAverage miss fraction by priority rank (0=highest DM priority):")
+        log(summary.to_string())
+
+    return results_df
+
+
 if __name__ == "__main__":
     results_df = run_utilization_sweep(
         utilization_levels=[0.5, 0.6, 0.7, 0.75, 0.8, 0.85, 0.9, 0.95, 1.0],
@@ -190,9 +272,9 @@ if __name__ == "__main__":
         output_dir='data',
         verbose=True,
     )
-    
+
     summary_df = compute_fraction_schedulable(results_df)
     summary_df.to_csv('data/fraction_schedulable_summary.csv', index=False)
-    
+
     print("\nFraction Schedulable Summary:")
     print(summary_df.to_string(index=False))
