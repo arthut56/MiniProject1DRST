@@ -29,6 +29,8 @@ def _normalize_task_columns(tasks: pd.DataFrame) -> pd.DataFrame:
     tasks = tasks.copy()
     if 'Task' in tasks.columns and 'Name' not in tasks.columns:
         tasks = tasks.rename(columns={'Task': 'Name'})
+    if 'BCET' not in tasks.columns and 'WCET' in tasks.columns:
+        tasks['BCET'] = tasks['WCET']
     required = ['Name', 'WCET', 'BCET', 'Period', 'Deadline']
     missing = [c for c in required if c not in tasks.columns]
     if missing:
@@ -69,6 +71,10 @@ def run_utilization_sweep(
     """
     if utilization_levels is None:
         utilization_levels = [0.5, 0.6, 0.7, 0.75, 0.8, 0.85, 0.9, 0.95, 1.0]
+    if samples_per_level <= 0:
+        raise ValueError("samples_per_level must be > 0")
+    if n_tasks is not None and n_tasks <= 0:
+        raise ValueError("n_tasks must be > 0 when provided")
     
     log = print if verbose else (lambda *args, **kwargs: None)
     log("=" * 80)
@@ -97,6 +103,7 @@ def run_utilization_sweep(
             log(f"  Generating {missing} missing task sets for U={U:.2f}...")
             start_idx = len(existing_files)
             for i in range(start_idx, samples_per_level):
+                # loop here: generate only what is missing so reruns stay cheap.
                 task_count = random.choice(sizes) if n_tasks is None else n_tasks
                 taskset = uunifast.generate_constrained_taskset(task_count, U)
                 out_file = os.path.join(util_dir, f"taskset_{i:04d}.csv")

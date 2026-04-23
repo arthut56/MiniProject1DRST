@@ -31,6 +31,8 @@ def _normalize_task_columns(tasks: pd.DataFrame) -> pd.DataFrame:
     tasks = tasks.copy()
     if "Task" in tasks.columns and "Name" not in tasks.columns:
         tasks = tasks.rename(columns={"Task": "Name"})
+    if "BCET" not in tasks.columns and "WCET" in tasks.columns:
+        tasks["BCET"] = tasks["WCET"]
     required = ["Name", "BCET", "WCET", "Period", "Deadline"]
     missing = [c for c in required if c not in tasks.columns]
     if missing:
@@ -66,6 +68,8 @@ def _build_arj_taskset(target_utilization: float) -> pd.DataFrame:
     if key not in REPORT_PLOT_TASKSETS:
         raise ValueError(f"No configured generated taskset for utilization {target_utilization}")
     return _require_plot_taskset(REPORT_PLOT_TASKSETS[key])
+
+
 def plot_fraction_schedulable(sweep_df, output_file=None):
     fig, ax = plt.subplots(figsize=(10, 6))
     ax.plot(sweep_df['utilization'], sweep_df['dm_fraction_schedulable'],
@@ -86,7 +90,7 @@ def plot_wcrt_comparison(results_df, output_file=None):
     valid = results_df[(pd.to_numeric(results_df['Ri_DM'], errors='coerce').notna()) &
                        (pd.to_numeric(results_df['Ri_EDF'], errors='coerce').notna())]
     if len(valid) == 0:
-        return fig
+        return _save_or_return(fig, output_file)
     x = np.arange(len(valid))
     width = 0.35
     dm_wcrt = pd.to_numeric(valid['Ri_DM'])
@@ -113,7 +117,11 @@ def plot_analytical_vs_observed(results_df, output_file=None):
               label='DM', color='#e74c3c', edgecolors='black', linewidth=0.5)
     ax.scatter(edf_ana[valid_edf], edf_obs[valid_edf], s=80, alpha=0.6,
               label='EDF', color='#2ecc71', edgecolors='black', linewidth=0.5)
-    max_val = max(dm_ana.max(), edf_ana.max(), dm_obs.max(), edf_obs.max())
+    all_vals = pd.concat([dm_ana, edf_ana, dm_obs, edf_obs]).dropna()
+    if all_vals.empty:
+        max_val = 1.0
+    else:
+        max_val = float(all_vals.max())
     ax.plot([0, max_val], [0, max_val], 'k--', linewidth=2, alpha=0.5)
     ax.set_xlabel('Analytical WCRT', fontsize=12, fontweight='bold')
     ax.set_ylabel('Observed Max RT', fontsize=12, fontweight='bold')
@@ -144,7 +152,10 @@ def plot_preemptions(results_df, output_file=None):
                ha='center', va='bottom', fontsize=11, fontweight='bold')
     ax.set_ylabel('Total Preemptions', fontsize=12, fontweight='bold')
     ax.set_title(title, fontsize=13, fontweight='bold')
-    ax.set_ylim(0, max(preempts) * 1.15)
+    y_max = max(preempts) * 1.15
+    if y_max <= 0:
+        y_max = 1.0
+    ax.set_ylim(0, y_max)
     ax.grid(axis='y', alpha=0.3)
     return _save_or_return(fig, output_file)
 

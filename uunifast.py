@@ -3,7 +3,14 @@
 import random
 import math
 import pandas as pd
+
+
 def uunifast(n, u):
+    if n <= 0:
+        raise ValueError("n must be > 0")
+    if u <= 0:
+        raise ValueError("u must be > 0")
+
     sumU = u
     utilizations = []
     for i in range(1, n):
@@ -26,6 +33,7 @@ def generate_constrained_taskset(n: int, target_u: float) -> pd.DataFrame:
         if random.random() < 0.5:
             d = period
         else:
+            # Not perfect modeling, but gives a healthy mix of implicit/constrained deadlines.
             d = random.randint(c, period)
         bcet = random.randint(1, c)
         tasks.append({

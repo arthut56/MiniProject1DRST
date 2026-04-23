@@ -9,16 +9,18 @@ from scheduler_analysis import (
     compute_hyperperiod,
     dm_schedulability_test,
     edf_dbf_feasibility_test,
-    simulate_schedule
+    simulate_schedule,
+    normalize_task_columns as normalize_taskset,
 )
+
+# This file is an executable analysis script, not a pytest test module.
+__test__ = False
 
 
 def normalize_task_columns(tasks: pd.DataFrame) -> pd.DataFrame:
     """Normalize column names to handle different CSV formats."""
-    tasks = tasks.copy()
-    if 'Task' in tasks.columns and 'Name' not in tasks.columns:
-        tasks = tasks.rename(columns={'Task': 'Name'})
-    return tasks
+    # Keep this wrapper for backwards compatibility with earlier imports.
+    return normalize_taskset(tasks)
 
 
 def test_task_set(csv_path: str) -> dict:

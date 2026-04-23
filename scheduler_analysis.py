@@ -5,25 +5,72 @@ import pandas as pd
 import numpy as np
 from dataclasses import dataclass, field
 from typing import List, Tuple, Dict, Optional, Any
-from enum import Enum
 import random
 from scipy.stats import truncnorm
 
 
 MAX_EXACT_HYPERPERIOD = 10**7
+REQUIRED_TASK_COLUMNS = ["Name", "WCET", "Period", "Deadline"]
 
 
 def compute_hyperperiod(periods: List[int]) -> int:
     """Compute the hyperperiod (LCM) of all task periods."""
+    if not periods:
+        raise ValueError("Cannot compute hyperperiod of an empty period list")
+
     H = 1
     for p in periods:
-        H = lcm(H, int(p))
+        p_int = int(p)
+        if p_int <= 0:
+            raise ValueError(f"Periods must be positive integers, got {p_int}")
+        H = lcm(H, p_int)
     return H
 
 
 def compute_utilization(tasks: pd.DataFrame) -> float:
     """Compute total utilization U = sum(C_i / T_i)."""
+    if (tasks["Period"] <= 0).any():
+        raise ValueError("All periods must be > 0")
     return float((tasks["WCET"] / tasks["Period"]).sum())
+
+
+def validate_taskset(tasks: pd.DataFrame) -> pd.DataFrame:
+    """Normalize and validate a constrained-deadline periodic task set."""
+    if not isinstance(tasks, pd.DataFrame):
+        raise TypeError("Task set must be provided as a pandas DataFrame")
+
+    normalized = tasks.copy()
+    if "Task" in normalized.columns and "Name" not in normalized.columns:
+        normalized = normalized.rename(columns={"Task": "Name"})
+
+    if "BCET" not in normalized.columns and "WCET" in normalized.columns:
+        # Some provided CSVs skip BCET; using WCET keeps deterministic semantics.
+        normalized["BCET"] = normalized["WCET"]
+
+    required = REQUIRED_TASK_COLUMNS + ["BCET"]
+    missing = [col for col in required if col not in normalized.columns]
+    if missing:
+        raise ValueError(f"Task set missing required columns: {missing}")
+
+    if normalized.empty:
+        raise ValueError("Task set is empty")
+
+    for col in ["BCET", "WCET", "Period", "Deadline"]:
+        normalized[col] = pd.to_numeric(normalized[col], errors="raise")
+
+    if (normalized["WCET"] <= 0).any() or (normalized["Period"] <= 0).any() or (normalized["Deadline"] <= 0).any():
+        raise ValueError("WCET, Period, and Deadline must all be > 0")
+    if (normalized["BCET"] < 0).any():
+        raise ValueError("BCET must be >= 0")
+    if (normalized["BCET"] > normalized["WCET"]).any():
+        raise ValueError("BCET must be <= WCET for every task")
+    if (normalized["Deadline"] > normalized["Period"]).any():
+        raise ValueError("Only constrained deadlines are supported: require Deadline <= Period")
+
+    # Keep the canonical column order up front, but preserve any extra columns.
+    front = ["Name", "BCET", "WCET", "Period", "Deadline"]
+    rest = [c for c in normalized.columns if c not in front]
+    return normalized[front + rest].reset_index(drop=True)
 
 
 
@@ -57,7 +104,7 @@ def dm_rta(tasks: pd.DataFrame) -> Tuple[pd.DataFrame, Tuple[bool, str]]:
         tasks: DataFrame with added "Ri_DM" column
         (schedulable, message): Tuple indicating schedulability
     """
-    tasks = tasks.copy().reset_index(drop=True)
+    tasks = validate_taskset(tasks)
 
     tasks["_orig_idx"] = tasks.index
     tasks = tasks.sort_values(by=["Deadline", "_orig_idx"]).reset_index(drop=True)
@@ -73,7 +120,7 @@ def dm_rta(tasks: pd.DataFrame) -> Tuple[pd.DataFrame, Tuple[bool, str]]:
         R = Ci
 
         max_iterations = 100000
-        for iteration in range(max_iterations):
+        for _ in range(max_iterations):
             R_old = R
 
             # Interference from all tasks with strictly higher DM priority.
@@ -149,20 +196,13 @@ def edf_dbf_feasibility_test(tasks: pd.DataFrame) -> Tuple[bool, str]:
     Returns:
         (feasible, message)
     """
-    tasks = tasks.copy().reset_index(drop=True)
+    tasks = validate_taskset(tasks)
 
     # Compute utilization
     U = compute_utilization(tasks)
 
-    #(floating-point tolerance)
-    if abs(U - 1.0) < 1e-9:
-        # U == 1: feasible only if all deadlines == periods
-        if (tasks["Deadline"] == tasks["Period"]).all():
-            return True, f"Feasible: U=1.0 and all D_i = T_i"
-        else:
-            return False, f"Infeasible: U=1.0 but some D_i < T_i"
-
-    if U > 1.0:
+    # Quick sanity check; otherwise the DBF loop below gets nonsense input.
+    if U > 1.0 + 1e-9:
         return False, f"Infeasible: U={U:.6f} > 1"
 
     # Compute hyperperiod
@@ -171,12 +211,17 @@ def edf_dbf_feasibility_test(tasks: pd.DataFrame) -> Tuple[bool, str]:
     # Compute D_max
     D_max = int(tasks["Deadline"].max())
 
-    # Compute L*
-    sum_term = float(((tasks["Period"] - tasks["Deadline"]) * (tasks["WCET"] / tasks["Period"])).sum())
-    L_star = sum_term / (1.0 - U)
+    if abs(1.0 - U) <= 1e-9:
+        # U~=1 makes L* singular. For periodic constrained-deadline sets we can
+        # still run an exact DBF check over one hyperperiod.
+        t_max = H
+    else:
+        # Compute L*
+        sum_term = float(((tasks["Period"] - tasks["Deadline"]) * (tasks["WCET"] / tasks["Period"])).sum())
+        L_star = sum_term / (1.0 - U)
 
-    # Compute t_max
-    t_max = min(H, max(D_max, int(math.ceil(L_star))))
+        # Compute t_max
+        t_max = min(H, max(D_max, int(math.ceil(L_star))))
 
     # Build set of absolute deadlines up to t_max
     test_points = set()
@@ -228,7 +273,7 @@ def edf_wcrt_schedule_construction(tasks: pd.DataFrame) -> Tuple[pd.DataFrame, T
         tasks: DataFrame with added "Ri_EDF" column
         (ok, message): Status tuple
     """
-    tasks = tasks.copy().reset_index(drop=True)
+    tasks = validate_taskset(tasks)
 
     # First check feasibility
     ok, msg = edf_dbf_feasibility_test(tasks)
@@ -353,6 +398,13 @@ def run_stochastic_simulation_stats(tasks: pd.DataFrame, policy: str,
     ``convergence_patience`` hyperperiods, further sampling yields diminishing
     returns.
     """
+    tasks = validate_taskset(tasks)
+
+    if num_runs <= 0:
+        raise ValueError("num_runs must be > 0")
+    if sim_time <= 0:
+        raise ValueError("sim_time must be > 0")
+
     n = len(tasks)
     all_rts = {i: [] for i in range(n)}
     observed_max = {i: 0 for i in range(n)}
@@ -384,7 +436,8 @@ def run_stochastic_simulation_stats(tasks: pd.DataFrame, policy: str,
             no_improvement_streak = 0
         else:
             no_improvement_streak += 1
-            if no_improvement_streak >= convergence_patience:
+            # We always honor the requested baseline run count first.
+            if (run + 1) >= num_runs and no_improvement_streak >= convergence_patience:
                 break
 
     mean_rt = {
@@ -403,21 +456,6 @@ def run_stochastic_simulation_stats(tasks: pd.DataFrame, policy: str,
         'total_deadline_misses': total_deadline_misses,
         'num_runs': run + 1,  # actual runs executed
     }
-
-
-#Discrete event sim
-class EventType(Enum):
-    RELEASE = 1
-    COMPLETE = 2
-
-
-@dataclass
-class Event:
-    """Simulation event."""
-    time: int
-    event_type: EventType
-    task_id: int
-    job_id: int
 
 
 @dataclass
@@ -651,8 +689,10 @@ def simulate_schedule(tasks: pd.DataFrame, policy: str = "DM",
     Returns:
         Dictionary with simulation results
     """
-    H = compute_hyperperiod(tasks["Period"].tolist())
-    sim_time = min(H, max_sim_time)
+    tasks = validate_taskset(tasks)
+    sim_time = int(max_sim_time)
+    if sim_time <= 0:
+        raise ValueError("max_sim_time must be > 0")
 
     sim = DiscreteEventSimulator(tasks, policy=policy, use_wcet=use_wcet, seed=seed)
     result = sim.run(sim_time)
@@ -686,6 +726,8 @@ def analyze_task_set(tasks: pd.DataFrame, num_sim_runs: int = 100,
     """
     log = print if verbose else (lambda *args, **kwargs: None)
     log("=" * 70)
+
+    tasks = validate_taskset(tasks)
     log("REAL-TIME SCHEDULING ANALYSIS")
     log("=" * 70)
 
@@ -746,10 +788,11 @@ def analyze_task_set(tasks: pd.DataFrame, num_sim_runs: int = 100,
     H = compute_hyperperiod(tasks["Period"].tolist())
     log(f"   Hyperperiod H = {H}")
 
-    max_sim_time = min(H, 100000)
-    sim_time = max_sim_time * max(1, int(num_hyperperiods))
-    if H > max_sim_time:
-        log(f"   WARNING: Hyperperiod large, using simulation time = {max_sim_time}")
+    base_window = min(H, 100000)
+    sim_time = base_window * max(1, int(num_hyperperiods))
+    if H > base_window:
+        # Not ideal, but this keeps big generated sets from exploding runtime.
+        log(f"   WARNING: Hyperperiod large, using per-window cap = {base_window}")
     if num_hyperperiods > 1:
         log(f"   Running for {num_hyperperiods} hyperperiods ({sim_time} time units)")
 
@@ -903,12 +946,7 @@ def generate_report(results: Dict[str, Any], output_file: Optional[str] = None) 
 
 def normalize_task_columns(tasks: pd.DataFrame) -> pd.DataFrame:
     """Normalize column names to handle different CSV formats."""
-    tasks = tasks.copy()
-    # Rename 'Task' to 'Name' if needed
-    if 'Task' in tasks.columns and 'Name' not in tasks.columns:
-        tasks = tasks.rename(columns={'Task': 'Name'})
-    return tasks
-    #extend as needed
+    return validate_taskset(tasks)
 
 
 if __name__ == "__main__":
