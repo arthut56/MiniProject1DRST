@@ -8,9 +8,17 @@ Scheduler analysis for DM/EDF: analytical WCRT, schedulability checks, simulatio
 python3 -m pip install -r requirements.txt
 ```
 
+## Run Tests
+
+```bash
+python3 -m pytest tests/ -v
+```
+
+3 regression tests covering edge cases (equal-deadline RTA, EDF boundary, column normalisation).
+
 ## Quick Start (recommended)
 
-Runs analysis, batch validation, and plotting (no utilization sweep).
+Runs analysis, batch validation, and plotting (no utilization sweep). Generates all figures needed for the report.
 
 ```bash
 python3 run_all_experiments.py --quick
@@ -21,15 +29,17 @@ Outputs:
 - `data/all_tasksets_results.csv`
 - `data/fig8_tc5_rt_samples.csv`
 - `data/fig9_arj_u07_u08_u09.csv`
-- `data/figures/fig*.png`
+- `data/figures/fig*.png`  ← used by the combined report
 
 ## Full Workflow
 
-Includes the utilization sweep (large: 500 samples per U-level) and all plots.
+Includes the utilization sweep (400 samples per U-level, ~2 min) and all plots.
 
 ```bash
 python3 run_all_experiments.py
 ```
+
+If `task_sets/generated/sweep/` does not exist, the sweep generates task sets on the fly.
 
 ## Individual Components
 
@@ -45,7 +55,6 @@ python3 experiments.py
 
 # Plot generation only (expects prior CSVs in data/)
 python3 visualizations.py
-
 ```
 
 `visualizations.py` reads CSV sources for all non-gantt plots:
@@ -54,12 +63,16 @@ python3 visualizations.py
 - Fig8 uses `data/fig8_tc5_rt_samples.csv`
 - Fig9 uses `data/fig9_arj_u07_u08_u09.csv`
 
-Note: `visualizations.py` is read-only with respect to CSV inputs. The full workflow (`run_all_experiments.py`) generates `fig8/fig9` CSVs explicitly before plotting.
+Note: `visualizations.py` is read-only with respect to CSV inputs. The full workflow
+(`run_all_experiments.py`) generates `fig8/fig9` CSVs explicitly before plotting.
 
-Figure 8/9 consume tasksets in `task_sets/generated/report_fig8_taskset.csv` and
+**Fig8 note:** `fig8_tc5_rt_samples.csv` is named after Figure 8 in the report. It uses a
+separate constrained-deadline task set (`task_sets/generated/report_fig8_taskset.csv`),
+**not** the TC5 task set from Table 5. TC5 has `D_i = T_i`; the Fig8 task set has
+`D_i < T_i` for several tasks. See the report caption for clarification.
+
+Figure 8/9 consume task sets in `task_sets/generated/report_fig8_taskset.csv` and
 `task_sets/generated/report_fig9_u0*.csv`.
-
-`experiments.py` uses pre-generated sweep tasksets from `task_sets/generated/sweep/uXXX/*.csv`.
 
 ## Layout
 
@@ -70,3 +83,4 @@ Figure 8/9 consume tasksets in `task_sets/generated/report_fig8_taskset.csv` and
 - `run_all_experiments.py` – orchestration (quick/full modes)
 - `data/` – analysis CSVs and generated figures
 - `task_sets/` – provided schedulable/unschedulable sets
+- `tests/` – regression test suite
