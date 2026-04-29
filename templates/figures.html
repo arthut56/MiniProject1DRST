@@ -1,0 +1,48 @@
+{% extends "base.html" %}
+{% block title %}Figures{% endblock %}
+{% block content %}
+<div class="d-flex justify-content-between align-items-center mb-3">
+    <div>
+        <h4 class="mb-0">Figures</h4>
+        <p class="text-muted small mb-0">{{ figures|length }} figure(s) found in data/figures/</p>
+    </div>
+    <form method="post" action="/figures/regenerate">
+        <button type="submit" class="btn btn-outline-primary btn-sm">Regenerate Gantt Charts</button>
+    </form>
+</div>
+
+{% if figures %}
+<div class="row g-3">
+    {% for fig in figures %}
+    <div class="col-md-6 col-lg-4">
+        <div class="card fig-card h-100">
+            <div class="card-header d-flex justify-content-between align-items-center">
+                <span class="fw-semibold small">{{ fig.label }}</span>
+                <a href="/figures/download/{{ fig.filename }}" class="btn btn-xs btn-sm btn-outline-secondary py-0 px-2" style="font-size:.7rem;">Download</a>
+            </div>
+            <div class="card-body p-2">
+                <img src="/figures/img/{{ fig.filename }}" alt="{{ fig.label }}" style="width:100%;border-radius:4px;cursor:zoom-in;">
+            </div>
+            <div class="card-footer text-muted" style="font-size:.72rem;">{{ fig.filename }}</div>
+        </div>
+    </div>
+    {% endfor %}
+</div>
+{% else %}
+<div class="alert alert-info">
+    No figures found. Run the workflow or generate Gantt charts first.
+    <a href="/gantt" class="alert-link">Generate Gantt Charts</a> |
+    <a href="/experiments" class="alert-link">Run Experiments</a>
+</div>
+{% endif %}
+{% endblock %}
+{% block scripts %}
+<script>
+document.querySelectorAll('.fig-card img').forEach(img => {
+    img.addEventListener('click', () => {
+        document.getElementById('figModalImg').src = img.src;
+        new bootstrap.Modal(document.getElementById('figModal')).show();
+    });
+});
+</script>
+{% endblock %}

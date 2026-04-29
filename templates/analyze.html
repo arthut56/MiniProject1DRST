@@ -1,0 +1,300 @@
+{% extends "base.html" %}
+{% block title %}Analyze Task Set{% endblock %}
+{% block content %}
+<h4 class="mb-1">Analyze Task Set</h4>
+<p class="text-muted mb-4">Run DM and EDF schedulability analysis on a task set.</p>
+
+<div class="card mb-4">
+    <div class="card-header">
+        <ul class="nav nav-tabs card-header-tabs" id="inputTabs">
+            <li class="nav-item"><a class="nav-link {% if not preset %}active{% endif %}" data-bs-toggle="tab" href="#tab-upload">Upload CSV</a></li>
+            <li class="nav-item"><a class="nav-link" data-bs-toggle="tab" href="#tab-manual">Manual Input</a></li>
+            <li class="nav-item"><a class="nav-link {% if preset %}active{% endif %}" data-bs-toggle="tab" href="#tab-preset">Bundled Sets</a></li>
+        </ul>
+    </div>
+    <div class="card-body">
+        <div class="tab-content">
+            <!-- Upload CSV -->
+            <div class="tab-pane fade {% if not preset %}show active{% endif %}" id="tab-upload">
+                <form method="post" enctype="multipart/form-data">
+                    <input type="hidden" name="input_mode" value="upload">
+                    <div class="mb-3">
+                        <label class="form-label fw-semibold">CSV File</label>
+                        <input class="form-control" type="file" name="csv_file" accept=".csv" required>
+                        <div class="form-text">Columns: Name, WCET, Period, Deadline (BCET optional)</div>
+                    </div>
+                    <div class="row g-3 mb-3">
+                        <div class="col-md-4">
+                            <label class="form-label">Sim Runs (stochastic)</label>
+                            <input type="number" class="form-control" name="num_sim_runs" value="20" min="1" max="500">
+                        </div>
+                        <div class="col-md-4">
+                            <label class="form-label">Hyperperiods</label>
+                            <input type="number" class="form-control" name="num_hyperperiods" value="1" min="1" max="10">
+                        </div>
+                        <div class="col-md-4">
+                            <label class="form-label">Random Seed</label>
+                            <input type="number" class="form-control" name="seed" value="42" min="0">
+                        </div>
+                    </div>
+                    <button type="submit" class="btn btn-primary">Run Analysis</button>
+                </form>
+            </div>
+
+            <!-- Manual Input -->
+            <div class="tab-pane fade" id="tab-manual">
+                <form method="post" id="manualForm">
+                    <input type="hidden" name="input_mode" value="manual">
+                    <input type="hidden" name="manual_tasks" id="manual_tasks_json">
+                    <p class="text-muted small mb-2">Add tasks then click Run Analysis.</p>
+                    <table class="table table-sm table-bordered" id="taskTable">
+                        <thead class="table-dark">
+                            <tr>
+                                <th>Name</th><th>BCET</th><th>WCET</th><th>Period</th><th>Deadline</th><th></th>
+                            </tr>
+                        </thead>
+                        <tbody id="taskBody">
+                            <tr>
+                                <td><input class="form-control form-control-sm" name="t_name" value="tau_1"></td>
+                                <td><input class="form-control form-control-sm" name="t_bcet" value="1" type="number" min="0"></td>
+                                <td><input class="form-control form-control-sm" name="t_wcet" value="2" type="number" min="1"></td>
+                                <td><input class="form-control form-control-sm" name="t_period" value="5" type="number" min="1"></td>
+                                <td><input class="form-control form-control-sm" name="t_deadline" value="5" type="number" min="1"></td>
+                                <td><button type="button" class="btn btn-sm btn-outline-danger" onclick="removeRow(this)">x</button></td>
+                            </tr>
+                            <tr>
+                                <td><input class="form-control form-control-sm" name="t_name" value="tau_2"></td>
+                                <td><input class="form-control form-control-sm" name="t_bcet" value="2" type="number" min="0"></td>
+                                <td><input class="form-control form-control-sm" name="t_wcet" value="3" type="number" min="1"></td>
+                                <td><input class="form-control form-control-sm" name="t_period" value="8" type="number" min="1"></td>
+                                <td><input class="form-control form-control-sm" name="t_deadline" value="8" type="number" min="1"></td>
+                                <td><button type="button" class="btn btn-sm btn-outline-danger" onclick="removeRow(this)">x</button></td>
+                            </tr>
+                        </tbody>
+                    </table>
+                    <div class="d-flex gap-2 mb-3">
+                        <button type="button" class="btn btn-sm btn-outline-secondary" onclick="addRow()">+ Add Task</button>
+                        <button type="button" class="btn btn-sm btn-outline-secondary" onclick="loadExample()">Load TC1 Example</button>
+                    </div>
+                    <div class="row g-3 mb-3">
+                        <div class="col-md-4">
+                            <label class="form-label">Sim Runs</label>
+                            <input type="number" class="form-control" name="num_sim_runs" value="20" min="1" max="500">
+                        </div>
+                        <div class="col-md-4">
+                            <label class="form-label">Hyperperiods</label>
+                            <input type="number" class="form-control" name="num_hyperperiods" value="1" min="1" max="10">
+                        </div>
+                        <div class="col-md-4">
+                            <label class="form-label">Random Seed</label>
+                            <input type="number" class="form-control" name="seed" value="42" min="0">
+                        </div>
+                    </div>
+                    <button type="submit" class="btn btn-primary" onclick="serializeTasks()">Run Analysis</button>
+                </form>
+            </div>
+
+            <!-- Preset -->
+            <div class="tab-pane fade {% if preset %}show active{% endif %}" id="tab-preset">
+                <form method="post">
+                    <input type="hidden" name="input_mode" value="preset">
+                    <div class="mb-3">
+                        <label class="form-label fw-semibold">Select Task Set</label>
+                        <select class="form-select" name="preset_path">
+                            {% for ts in bundled_tasksets %}
+                            <option value="{{ ts.path }}" {% if ts.path == preset %}selected{% endif %}>{{ ts.label }}</option>
+                            {% endfor %}
+                        </select>
+                    </div>
+                    <div class="row g-3 mb-3">
+                        <div class="col-md-4">
+                            <label class="form-label">Sim Runs</label>
+                            <input type="number" class="form-control" name="num_sim_runs" value="20" min="1" max="500">
+                        </div>
+                        <div class="col-md-4">
+                            <label class="form-label">Hyperperiods</label>
+                            <input type="number" class="form-control" name="num_hyperperiods" value="1" min="1" max="10">
+                        </div>
+                        <div class="col-md-4">
+                            <label class="form-label">Random Seed</label>
+                            <input type="number" class="form-control" name="seed" value="42" min="0">
+                        </div>
+                    </div>
+                    <button type="submit" class="btn btn-primary">Run Analysis</button>
+                </form>
+            </div>
+        </div>
+    </div>
+</div>
+
+{% if results %}
+<hr>
+<h5 class="mb-3">Results</h5>
+
+<div class="row g-3 mb-4">
+    <div class="col-md-3">
+        <div class="card text-center">
+            <div class="card-body">
+                <div class="fw-bold fs-4">{{ "%.4f"|format(results.utilization) }}</div>
+                <div class="text-muted small">Total Utilization</div>
+            </div>
+        </div>
+    </div>
+    <div class="col-md-3">
+        <div class="card text-center result-card {{ 'success' if results.dm_schedulable else 'failure' }}">
+            <div class="card-body">
+                <div class="fw-bold fs-5">{{ 'Schedulable' if results.dm_schedulable else 'NOT Schedulable' }}</div>
+                <div class="text-muted small">DM (RTA)</div>
+                <div class="small text-truncate" title="{{ results.dm_message }}">{{ results.dm_message }}</div>
+            </div>
+        </div>
+    </div>
+    <div class="col-md-3">
+        <div class="card text-center result-card {{ 'success' if results.edf_feasible else 'failure' }}">
+            <div class="card-body">
+                <div class="fw-bold fs-5">{{ 'Feasible' if results.edf_feasible else 'NOT Feasible' }}</div>
+                <div class="text-muted small">EDF (DBF)</div>
+                <div class="small text-truncate" title="{{ results.edf_message }}">{{ results.edf_message }}</div>
+            </div>
+        </div>
+    </div>
+    <div class="col-md-3">
+        <div class="card text-center">
+            <div class="card-body">
+                <div class="fw-bold fs-5">{{ results.dm_sim.deadline_misses.values()|sum }} / {{ results.edf_sim.deadline_misses.values()|sum }}</div>
+                <div class="text-muted small">Deadline Misses (DM/EDF sim)</div>
+                <div class="small">Preemptions: {{ results.dm_sim.preemptions.values()|sum }} / {{ results.edf_sim.preemptions.values()|sum }}</div>
+            </div>
+        </div>
+    </div>
+</div>
+
+<div class="card mb-4">
+    <div class="card-header fw-semibold">Per-Task Results</div>
+    <div class="card-body p-0">
+        <div class="table-responsive">
+            <table class="table table-sm table-hover mb-0 results">
+                <thead>
+                    <tr>
+                        <th>Task</th><th>BCET</th><th>WCET</th><th>Period</th><th>Deadline</th>
+                        <th>Ri_DM</th><th>Ri_EDF</th>
+                        <th>DM Sim</th><th>EDF Sim</th>
+                        <th>DM Obs Max</th><th>EDF Obs Max</th>
+                        <th>DM Preempt</th><th>EDF Preempt</th>
+                    </tr>
+                </thead>
+                <tbody>
+                    {% for row in results.table_rows %}
+                    <tr>
+                        <td><strong>{{ row.Name }}</strong></td>
+                        <td>{{ row.BCET }}</td>
+                        <td>{{ row.WCET }}</td>
+                        <td>{{ row.Period }}</td>
+                        <td>{{ row.Deadline }}</td>
+                        <td class="{{ 'text-danger fw-bold' if row.Ri_DM == 'UNFEASIBLE' else '' }}">{{ row.Ri_DM }}</td>
+                        <td class="{{ 'text-danger fw-bold' if row.Ri_EDF == 'UNFEASIBLE' else '' }}">{{ row.Ri_EDF }}</td>
+                        <td>{{ row.Ri_DM_sim }}</td>
+                        <td>{{ row.Ri_EDF_sim }}</td>
+                        <td>{{ row.Ri_DM_obs_max }}</td>
+                        <td>{{ row.Ri_EDF_obs_max }}</td>
+                        <td>{{ row.DM_preemptions }}</td>
+                        <td>{{ row.EDF_preemptions }}</td>
+                    </tr>
+                    {% endfor %}
+                </tbody>
+            </table>
+        </div>
+    </div>
+</div>
+
+{% if results.plot_wcrt %}
+<div class="row g-3">
+    <div class="col-md-6">
+        <div class="card fig-card">
+            <div class="card-header fw-semibold">WCRT Comparison (DM vs EDF)</div>
+            <div class="card-body p-2">
+                <img src="data:image/png;base64,{{ results.plot_wcrt }}" class="w-100" style="cursor:zoom-in;" onclick="showModal(this.src)">
+            </div>
+        </div>
+    </div>
+    {% if results.plot_obs %}
+    <div class="col-md-6">
+        <div class="card fig-card">
+            <div class="card-header fw-semibold">Analytical vs Observed RT</div>
+            <div class="card-body p-2">
+                <img src="data:image/png;base64,{{ results.plot_obs }}" class="w-100" style="cursor:zoom-in;" onclick="showModal(this.src)">
+            </div>
+        </div>
+    </div>
+    {% endif %}
+</div>
+{% endif %}
+{% endif %}
+
+{% endblock %}
+{% block scripts %}
+<script>
+let rowCount = 3;
+
+function addRow() {
+    const tbody = document.getElementById('taskBody');
+    const tr = document.createElement('tr');
+    tr.innerHTML = `
+        <td><input class="form-control form-control-sm" name="t_name" value="tau_${rowCount}"></td>
+        <td><input class="form-control form-control-sm" name="t_bcet" value="1" type="number" min="0"></td>
+        <td><input class="form-control form-control-sm" name="t_wcet" value="1" type="number" min="1"></td>
+        <td><input class="form-control form-control-sm" name="t_period" value="10" type="number" min="1"></td>
+        <td><input class="form-control form-control-sm" name="t_deadline" value="10" type="number" min="1"></td>
+        <td><button type="button" class="btn btn-sm btn-outline-danger" onclick="removeRow(this)">x</button></td>`;
+    tbody.appendChild(tr);
+    rowCount++;
+}
+
+function removeRow(btn) {
+    btn.closest('tr').remove();
+}
+
+function serializeTasks() {
+    const rows = document.querySelectorAll('#taskBody tr');
+    const tasks = [];
+    rows.forEach(r => {
+        const inputs = r.querySelectorAll('input');
+        tasks.push({
+            Name: inputs[0].value,
+            BCET: parseFloat(inputs[1].value),
+            WCET: parseFloat(inputs[2].value),
+            Period: parseFloat(inputs[3].value),
+            Deadline: parseFloat(inputs[4].value),
+        });
+    });
+    document.getElementById('manual_tasks_json').value = JSON.stringify(tasks);
+}
+
+function loadExample() {
+    const tbody = document.getElementById('taskBody');
+    tbody.innerHTML = '';
+    const tc1 = [
+        {name:'tau_1',bcet:1,wcet:1,period:4,deadline:4},
+        {name:'tau_2',bcet:2,wcet:2,period:6,deadline:6},
+        {name:'tau_3',bcet:1,wcet:1,period:8,deadline:8},
+    ];
+    tc1.forEach((t, i) => {
+        const tr = document.createElement('tr');
+        tr.innerHTML = `
+            <td><input class="form-control form-control-sm" name="t_name" value="${t.name}"></td>
+            <td><input class="form-control form-control-sm" name="t_bcet" value="${t.bcet}" type="number" min="0"></td>
+            <td><input class="form-control form-control-sm" name="t_wcet" value="${t.wcet}" type="number" min="1"></td>
+            <td><input class="form-control form-control-sm" name="t_period" value="${t.period}" type="number" min="1"></td>
+            <td><input class="form-control form-control-sm" name="t_deadline" value="${t.deadline}" type="number" min="1"></td>
+            <td><button type="button" class="btn btn-sm btn-outline-danger" onclick="removeRow(this)">x</button></td>`;
+        tbody.appendChild(tr);
+    });
+    rowCount = 4;
+}
+
+function showModal(src) {
+    document.getElementById('figModalImg').src = src;
+    new bootstrap.Modal(document.getElementById('figModal')).show();
+}
+</script>
+{% endblock %}

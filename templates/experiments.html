@@ -1,0 +1,125 @@
+{% extends "base.html" %}
+{% block title %}Utilization Sweep{% endblock %}
+{% block content %}
+<h4 class="mb-1">Utilization Sweep</h4>
+<p class="text-muted mb-4">Sweep utilization levels and compare DM vs EDF fraction-schedulable.</p>
+
+<div class="card mb-4">
+    <div class="card-header fw-semibold">Configuration</div>
+    <div class="card-body">
+        <form method="post">
+            <div class="row g-3 mb-3">
+                <div class="col-md-6">
+                    <label class="form-label">Utilization Levels <small class="text-muted">(comma-separated, e.g. 0.5,0.7,0.9,1.0)</small></label>
+                    <input type="text" class="form-control" name="util_levels" value="0.5,0.6,0.7,0.75,0.8,0.85,0.9,0.95,1.0">
+                </div>
+                <div class="col-md-3">
+                    <label class="form-label">Samples per Level</label>
+                    <input type="number" class="form-control" name="samples_per_level" value="100" min="1" max="2000">
+                </div>
+                <div class="col-md-3">
+                    <label class="form-label">Tasks per Set</label>
+                    <select class="form-select" name="n_tasks">
+                        <option value="varied">Varied (10/15/20)</option>
+                        <option value="10">10</option>
+                        <option value="15">15</option>
+                        <option value="20">20</option>
+                    </select>
+                </div>
+            </div>
+            <div class="alert alert-warning small mb-3">
+                Large sweeps may take several minutes. Cached task sets will be reused from <code>task_sets/generated/sweep/</code>.
+            </div>
+            <button type="submit" class="btn btn-primary">Run Sweep</button>
+        </form>
+    </div>
+</div>
+
+{% if sweep_results %}
+<div class="card mb-4">
+    <div class="card-header fw-semibold">Fraction Schedulable Summary</div>
+    <div class="card-body p-0">
+        <table class="table table-sm table-hover mb-0">
+            <thead class="table-dark">
+                <tr><th>Utilization</th><th>DM Fraction</th><th>EDF Fraction</th><th>Samples</th></tr>
+            </thead>
+            <tbody>
+                {% for row in sweep_results %}
+                <tr>
+                    <td>{{ "%.2f"|format(row.utilization) }}</td>
+                    <td>
+                        <div class="d-flex align-items-center gap-2">
+                            <div class="progress flex-grow-1" style="height:12px;">
+                                <div class="progress-bar bg-danger" style="width:{{ (row.dm_fraction_schedulable*100)|int }}%"></div>
+                            </div>
+                            {{ "%.1f"|format(row.dm_fraction_schedulable*100) }}%
+                        </div>
+                    </td>
+                    <td>
+                        <div class="d-flex align-items-center gap-2">
+                            <div class="progress flex-grow-1" style="height:12px;">
+                                <div class="progress-bar bg-success" style="width:{{ (row.edf_fraction_schedulable*100)|int }}%"></div>
+                            </div>
+                            {{ "%.1f"|format(row.edf_fraction_schedulable*100) }}%
+                        </div>
+                    </td>
+                    <td>{{ row.n_samples }}</td>
+                </tr>
+                {% endfor %}
+            </tbody>
+        </table>
+    </div>
+</div>
+{% if sweep_plot %}
+<div class="card">
+    <div class="card-header fw-semibold">Fraction Schedulable Plot</div>
+    <div class="card-body p-2">
+        <img src="data:image/png;base64,{{ sweep_plot }}" class="w-100" style="max-height:500px;object-fit:contain;cursor:zoom-in;" onclick="showModal(this.src)">
+    </div>
+</div>
+{% endif %}
+{% elif existing_summary %}
+<div class="card mb-4">
+    <div class="card-header fw-semibold">Last Sweep Results <small class="text-muted">(from data/fraction_schedulable_summary.csv)</small></div>
+    <div class="card-body p-0">
+        <table class="table table-sm table-hover mb-0">
+            <thead class="table-dark">
+                <tr><th>Utilization</th><th>DM Fraction</th><th>EDF Fraction</th><th>Samples</th></tr>
+            </thead>
+            <tbody>
+                {% for row in existing_summary %}
+                <tr>
+                    <td>{{ "%.2f"|format(row.utilization) }}</td>
+                    <td>
+                        <div class="d-flex align-items-center gap-2">
+                            <div class="progress flex-grow-1" style="height:12px;">
+                                <div class="progress-bar bg-danger" style="width:{{ (row.dm_fraction_schedulable*100)|int }}%"></div>
+                            </div>
+                            {{ "%.1f"|format(row.dm_fraction_schedulable*100) }}%
+                        </div>
+                    </td>
+                    <td>
+                        <div class="d-flex align-items-center gap-2">
+                            <div class="progress flex-grow-1" style="height:12px;">
+                                <div class="progress-bar bg-success" style="width:{{ (row.edf_fraction_schedulable*100)|int }}%"></div>
+                            </div>
+                            {{ "%.1f"|format(row.edf_fraction_schedulable*100) }}%
+                        </div>
+                    </td>
+                    <td>{{ row.n_samples }}</td>
+                </tr>
+                {% endfor %}
+            </tbody>
+        </table>
+    </div>
+</div>
+{% endif %}
+{% endblock %}
+{% block scripts %}
+<script>
+function showModal(src) {
+    document.getElementById('figModalImg').src = src;
+    new bootstrap.Modal(document.getElementById('figModal')).show();
+}
+</script>
+{% endblock %}

@@ -6,7 +6,28 @@ Scheduler analysis for DM/EDF: analytical WCRT, schedulability checks, simulatio
 
 ```bash
 python3 -m pip install -r requirements.txt
+pip install flask
 ```
+
+## Web GUI
+
+```bash
+python3 app.py
+```
+
+Open `http://localhost:5000`.
+
+| Page | What it does |
+|------|-------------|
+| Dashboard | Stats overview, quick links to bundled task sets |
+| Analyze Task Set | Upload CSV, enter tasks manually, or pick a bundled set; runs DM + EDF analysis and shows inline plots |
+| Gantt Charts | Generate TC1/TC2 built-in charts or custom task set charts |
+| Utilization Sweep | Configure and run `experiments.run_utilization_sweep`; shows fraction-schedulable table + plot |
+| Overload Analysis | Run `experiments.run_overload_deadline_miss_analysis`; shows miss fraction by priority rank |
+| Figures | Gallery of all PNGs in `data/figures/` with download |
+| Data Files | Browse and download any CSV in `data/` |
+
+CLI and all existing scripts remain unchanged. The GUI sits on top and does not modify any of them.
 
 ## Run Tests
 
@@ -66,10 +87,10 @@ python3 visualizations.py
 Note: `visualizations.py` is read-only with respect to CSV inputs. The full workflow
 (`run_all_experiments.py`) generates `fig8/fig9` CSVs explicitly before plotting.
 
-**Fig8 note:** `fig8_tc5_rt_samples.csv` is named after Figure 8 in the report. It uses a
-separate constrained-deadline task set (`task_sets/generated/report_fig8_taskset.csv`),
-**not** the TC5 task set from Table 5. TC5 has `D_i = T_i`; the Fig8 task set has
-`D_i < T_i` for several tasks. See the report caption for clarification.
+Note on Fig8: `fig8_tc5_rt_samples.csv` uses a separate constrained-deadline task set
+(`task_sets/generated/report_fig8_taskset.csv`), not the TC5 task set from Table 5.
+TC5 has `D_i = T_i`; the Fig8 task set has `D_i < T_i` for several tasks. See the
+report caption for clarification.
 
 Figure 8/9 consume task sets in `task_sets/generated/report_fig8_taskset.csv` and
 `task_sets/generated/report_fig9_u0*.csv`.

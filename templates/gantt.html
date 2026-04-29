@@ -1,0 +1,154 @@
+{% extends "base.html" %}
+{% block title %}Gantt Charts{% endblock %}
+{% block content %}
+<h4 class="mb-1">Gantt Charts</h4>
+<p class="text-muted mb-4">Generate schedule Gantt charts for DM and EDF.</p>
+
+<div class="card mb-4">
+    <div class="card-header">
+        <ul class="nav nav-tabs card-header-tabs" id="ganttTabs">
+            <li class="nav-item"><a class="nav-link active" data-bs-toggle="tab" href="#tab-builtin">Built-in (TC1 / TC2)</a></li>
+            <li class="nav-item"><a class="nav-link" data-bs-toggle="tab" href="#tab-custom">Custom Task Set</a></li>
+        </ul>
+    </div>
+    <div class="card-body">
+        <div class="tab-content">
+            <div class="tab-pane fade show active" id="tab-builtin">
+                <p class="text-muted small mb-3">Generates Gantt charts for TC1 (3-task, U=0.708) and TC2 (2-task, U=0.971) from the report.</p>
+                <form method="post" action="/gantt/builtin">
+                    <button type="submit" class="btn btn-primary">Generate TC1 + TC2 Gantt Charts</button>
+                </form>
+            </div>
+            <div class="tab-pane fade" id="tab-custom">
+                <form method="post" action="/gantt/custom" id="ganttCustomForm">
+                    <input type="hidden" name="manual_tasks" id="gantt_tasks_json">
+                    <p class="text-muted small mb-2">Enter task set to visualize:</p>
+                    <table class="table table-sm table-bordered" id="ganttTaskTable">
+                        <thead class="table-dark">
+                            <tr><th>Name</th><th>WCET</th><th>Period</th><th>Deadline</th><th></th></tr>
+                        </thead>
+                        <tbody id="ganttTaskBody">
+                            <tr>
+                                <td><input class="form-control form-control-sm" value="tau_1"></td>
+                                <td><input class="form-control form-control-sm" type="number" value="1" min="1"></td>
+                                <td><input class="form-control form-control-sm" type="number" value="4" min="1"></td>
+                                <td><input class="form-control form-control-sm" type="number" value="4" min="1"></td>
+                                <td><button type="button" class="btn btn-sm btn-outline-danger" onclick="this.closest('tr').remove()">x</button></td>
+                            </tr>
+                            <tr>
+                                <td><input class="form-control form-control-sm" value="tau_2"></td>
+                                <td><input class="form-control form-control-sm" type="number" value="2" min="1"></td>
+                                <td><input class="form-control form-control-sm" type="number" value="6" min="1"></td>
+                                <td><input class="form-control form-control-sm" type="number" value="6" min="1"></td>
+                                <td><button type="button" class="btn btn-sm btn-outline-danger" onclick="this.closest('tr').remove()">x</button></td>
+                            </tr>
+                            <tr>
+                                <td><input class="form-control form-control-sm" value="tau_3"></td>
+                                <td><input class="form-control form-control-sm" type="number" value="1" min="1"></td>
+                                <td><input class="form-control form-control-sm" type="number" value="8" min="1"></td>
+                                <td><input class="form-control form-control-sm" type="number" value="8" min="1"></td>
+                                <td><button type="button" class="btn btn-sm btn-outline-danger" onclick="this.closest('tr').remove()">x</button></td>
+                            </tr>
+                        </tbody>
+                    </table>
+                    <div class="d-flex gap-2 mb-3">
+                        <button type="button" class="btn btn-sm btn-outline-secondary" onclick="addGanttRow()">+ Add Task</button>
+                    </div>
+                    <div class="row g-2 mb-3">
+                        <div class="col-md-4">
+                            <label class="form-label small">Policy</label>
+                            <select class="form-select form-select-sm" name="policy">
+                                <option value="both">Both (DM + EDF)</option>
+                                <option value="DM">DM only</option>
+                                <option value="EDF">EDF only</option>
+                            </select>
+                        </div>
+                        <div class="col-md-4">
+                            <label class="form-label small">Time Limit (0 = hyperperiod)</label>
+                            <input type="number" class="form-control form-control-sm" name="time_limit" value="0" min="0">
+                        </div>
+                    </div>
+                    <button type="submit" class="btn btn-primary" onclick="serializeGanttTasks()">Generate Gantt Chart</button>
+                </form>
+            </div>
+        </div>
+    </div>
+</div>
+
+{% if gantt_plots %}
+<div class="row g-3">
+    {% for p in gantt_plots %}
+    <div class="col-md-6">
+        <div class="card fig-card">
+            <div class="card-header fw-semibold">{{ p.label }}</div>
+            <div class="card-body p-2">
+                <img src="data:image/png;base64,{{ p.data }}" class="w-100" style="cursor:zoom-in;" onclick="showModal(this.src)">
+            </div>
+        </div>
+    </div>
+    {% endfor %}
+</div>
+{% endif %}
+
+{% if saved_gantt_figs %}
+<hr>
+<h6 class="mb-3">Previously Generated Gantt Charts</h6>
+<div class="row g-3">
+    {% for fig in saved_gantt_figs %}
+    <div class="col-md-4">
+        <div class="card fig-card">
+            <div class="card-header small fw-semibold">{{ fig.label }}</div>
+            <div class="card-body p-2">
+                <img src="/figures/img/{{ fig.filename }}" class="w-100" style="cursor:zoom-in;">
+            </div>
+        </div>
+    </div>
+    {% endfor %}
+</div>
+{% endif %}
+{% endblock %}
+{% block scripts %}
+<script>
+let ganttRowCount = 4;
+
+function addGanttRow() {
+    const tbody = document.getElementById('ganttTaskBody');
+    const tr = document.createElement('tr');
+    tr.innerHTML = `
+        <td><input class="form-control form-control-sm" value="tau_${ganttRowCount}"></td>
+        <td><input class="form-control form-control-sm" type="number" value="1" min="1"></td>
+        <td><input class="form-control form-control-sm" type="number" value="10" min="1"></td>
+        <td><input class="form-control form-control-sm" type="number" value="10" min="1"></td>
+        <td><button type="button" class="btn btn-sm btn-outline-danger" onclick="this.closest('tr').remove()">x</button></td>`;
+    tbody.appendChild(tr);
+    ganttRowCount++;
+}
+
+function serializeGanttTasks() {
+    const rows = document.querySelectorAll('#ganttTaskBody tr');
+    const tasks = [];
+    rows.forEach(r => {
+        const inputs = r.querySelectorAll('input');
+        tasks.push({
+            Name: inputs[0].value,
+            WCET: parseFloat(inputs[1].value),
+            Period: parseFloat(inputs[2].value),
+            Deadline: parseFloat(inputs[3].value),
+        });
+    });
+    document.getElementById('gantt_tasks_json').value = JSON.stringify(tasks);
+}
+
+function showModal(src) {
+    document.getElementById('figModalImg').src = src;
+    new bootstrap.Modal(document.getElementById('figModal')).show();
+}
+
+document.querySelectorAll('.fig-card img').forEach(img => {
+    img.addEventListener('click', () => {
+        document.getElementById('figModalImg').src = img.src;
+        new bootstrap.Modal(document.getElementById('figModal')).show();
+    });
+});
+</script>
+{% endblock %}

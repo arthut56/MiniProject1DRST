@@ -1,0 +1,70 @@
+{% extends "base.html" %}
+{% block title %}Overload Analysis{% endblock %}
+{% block content %}
+<h4 class="mb-1">Overload Analysis</h4>
+<p class="text-muted mb-4">Simulate deadline miss distribution under slight overload (U &gt; 1).</p>
+
+<div class="card mb-4">
+    <div class="card-header fw-semibold">Configuration</div>
+    <div class="card-body">
+        <form method="post">
+            <div class="row g-3 mb-3">
+                <div class="col-md-3">
+                    <label class="form-label">Overload Utilization</label>
+                    <input type="number" class="form-control" name="overload_u" value="1.05" min="1.01" max="2.0" step="0.01">
+                </div>
+                <div class="col-md-3">
+                    <label class="form-label">Task Sets</label>
+                    <input type="number" class="form-control" name="n_tasksets" value="50" min="1" max="500">
+                </div>
+                <div class="col-md-3">
+                    <label class="form-label">Tasks per Set</label>
+                    <input type="number" class="form-control" name="n_tasks" value="6" min="2" max="20">
+                </div>
+                <div class="col-md-3">
+                    <label class="form-label">Sim Hyperperiods</label>
+                    <input type="number" class="form-control" name="sim_hyperperiods" value="4" min="1" max="20">
+                </div>
+            </div>
+            <button type="submit" class="btn btn-primary">Run Overload Analysis</button>
+        </form>
+    </div>
+</div>
+
+{% if results %}
+<div class="card mb-4">
+    <div class="card-header fw-semibold">Miss Fraction by Priority Rank</div>
+    <div class="card-body">
+        <p class="text-muted small">Priority rank 0 = highest DM priority (shortest deadline). Under DM, low-priority tasks accumulate more misses. EDF distributes misses more evenly.</p>
+        <table class="table table-sm table-bordered">
+            <thead class="table-dark">
+                <tr><th>Priority Rank</th><th>Avg DM Miss Fraction</th><th>Avg EDF Miss Fraction</th></tr>
+            </thead>
+            <tbody>
+                {% for row in results %}
+                <tr>
+                    <td>{{ row.priority_rank }}</td>
+                    <td>
+                        <div class="d-flex align-items-center gap-2">
+                            <div class="progress flex-grow-1" style="height:12px;">
+                                <div class="progress-bar bg-danger" style="width:{{ [row.dm_miss_fraction*100, 100]|min|int }}%"></div>
+                            </div>
+                            {{ "%.3f"|format(row.dm_miss_fraction) }}
+                        </div>
+                    </td>
+                    <td>
+                        <div class="d-flex align-items-center gap-2">
+                            <div class="progress flex-grow-1" style="height:12px;">
+                                <div class="progress-bar bg-success" style="width:{{ [row.edf_miss_fraction*100, 100]|min|int }}%"></div>
+                            </div>
+                            {{ "%.3f"|format(row.edf_miss_fraction) }}
+                        </div>
+                    </td>
+                </tr>
+                {% endfor %}
+            </tbody>
+        </table>
+    </div>
+</div>
+{% endif %}
+{% endblock %}

@@ -1,0 +1,74 @@
+{% extends "base.html" %}
+{% block title %}Dashboard — RT Scheduler{% endblock %}
+{% block content %}
+<h4 class="mb-1">Dashboard</h4>
+<p class="text-muted mb-4">Real-time scheduling analysis: DM and EDF schedulers.</p>
+
+<div class="row g-3 mb-4">
+    <div class="col-md-3">
+        <div class="card text-center h-100">
+            <div class="card-body">
+                <div style="font-size:2rem;font-weight:700;color:#0d6efd;">{{ stats.n_tasksets }}</div>
+                <div class="text-muted small">Task Sets Available</div>
+            </div>
+            <div class="card-footer"><a href="/analyze" class="btn btn-sm btn-primary w-100">Analyze</a></div>
+        </div>
+    </div>
+    <div class="col-md-3">
+        <div class="card text-center h-100">
+            <div class="card-body">
+                <div style="font-size:2rem;font-weight:700;color:#198754;">{{ stats.n_figures }}</div>
+                <div class="text-muted small">Figures Generated</div>
+            </div>
+            <div class="card-footer"><a href="/figures" class="btn btn-sm btn-success w-100">View Figures</a></div>
+        </div>
+    </div>
+    <div class="col-md-3">
+        <div class="card text-center h-100">
+            <div class="card-body">
+                <div style="font-size:2rem;font-weight:700;color:#6f42c1;">{{ stats.n_sweep_rows }}</div>
+                <div class="text-muted small">Sweep Samples</div>
+            </div>
+            <div class="card-footer"><a href="/experiments" class="btn btn-sm btn-outline-secondary w-100">Run Sweep</a></div>
+        </div>
+    </div>
+    <div class="col-md-3">
+        <div class="card text-center h-100">
+            <div class="card-body">
+                <div style="font-size:2rem;font-weight:700;color:#fd7e14;">{{ stats.n_data_files }}</div>
+                <div class="text-muted small">Data Files</div>
+            </div>
+            <div class="card-footer"><a href="/data" class="btn btn-sm btn-outline-secondary w-100">View Data</a></div>
+        </div>
+    </div>
+</div>
+
+<div class="row g-3">
+    <div class="col-md-6">
+        <div class="card h-100">
+            <div class="card-header fw-semibold">Quick Actions</div>
+            <div class="card-body d-flex flex-column gap-2">
+                <a href="/analyze" class="btn btn-outline-primary">Analyze a task set (DM + EDF)</a>
+                <a href="/gantt" class="btn btn-outline-secondary">Generate Gantt charts</a>
+                <a href="/experiments" class="btn btn-outline-secondary">Run utilization sweep</a>
+                <a href="/overload" class="btn btn-outline-secondary">Run overload analysis</a>
+            </div>
+        </div>
+    </div>
+    <div class="col-md-6">
+        <div class="card h-100">
+            <div class="card-header fw-semibold">Bundled Task Sets</div>
+            <div class="card-body p-0">
+                <ul class="list-group list-group-flush">
+                    {% for ts in bundled_tasksets %}
+                    <li class="list-group-item d-flex justify-content-between align-items-center">
+                        <small class="text-truncate" style="max-width:280px;">{{ ts.name }}</small>
+                        <a href="/analyze?preset={{ ts.path }}" class="btn btn-xs btn-sm btn-outline-primary py-0 px-2" style="font-size:.75rem;">Analyze</a>
+                    </li>
+                    {% endfor %}
+                </ul>
+            </div>
+        </div>
+    </div>
+</div>
+{% endblock %}
