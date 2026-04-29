@@ -4,6 +4,7 @@
 __pycache__/
 *.pyc
 non_source/
-task_sets/generated/sweep/
+task_sets/generated/
+data/
 instance/
 .env
