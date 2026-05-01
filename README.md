@@ -2,11 +2,20 @@
 
 Scheduler analysis for DM/EDF: analytical WCRT, schedulability checks, simulation, and comparison utilities.
 
+---
+
+## Group 21
+    Arturo Cortes - s225187
+    Kasim Hussain - s225165
+    Landon Hassin - s252773
+    Matthew Asano - s225134
+
+---
+
 ## Setup
 
 ```bash
 python3 -m pip install -r requirements.txt
-pip install flask
 ```
 
 ## Web GUI
@@ -20,10 +29,10 @@ Open `http://localhost:5000`.
 | Page | What it does |
 |------|-------------|
 | Dashboard | Stats overview, quick links to bundled task sets |
-| Analyze Task Set | Upload CSV, enter tasks manually, or pick a bundled set; runs DM + EDF analysis and shows inline plots |
+| Analyze Task Set | Upload CSV, enter tasks manually, or pick a bundled set: runs DM + EDF analysis and shows inline plots |
 | Gantt Charts | Generate TC1/TC2 built-in charts or custom task set charts |
-| Utilization Sweep | Configure and run `experiments.run_utilization_sweep`; shows fraction-schedulable table + plot |
-| Overload Analysis | Run `experiments.run_overload_deadline_miss_analysis`; shows miss fraction by priority rank |
+| Utilization Sweep | Configure and run `experiments.run_utilization_sweep`: shows fraction-schedulable table + plot |
+| Overload Analysis | Run `experiments.run_overload_deadline_miss_analysis`: shows miss fraction by priority rank |
 | Figures | Gallery of all PNGs in `data/figures/` with download |
 | Data Files | Browse and download any CSV in `data/` |
 
@@ -37,9 +46,9 @@ python3 -m pytest tests/ -v
 
 3 regression tests covering edge cases (equal-deadline RTA, EDF boundary, column normalisation).
 
-## Quick Start (recommended)
+## Quick Start
 
-Runs analysis, batch validation, and plotting (no utilization sweep). Generates all figures needed for the report.
+Runs analysis, batch validation, and plotting (no utilization sweep, since it can take a while to run). Generates all figures needed for the report.
 
 ```bash
 python3 run_all_experiments.py --quick
@@ -50,17 +59,15 @@ Outputs:
 - `data/all_tasksets_results.csv`
 - `data/fig8_tc5_rt_samples.csv`
 - `data/fig9_arj_u07_u08_u09.csv`
-- `data/figures/fig*.png`  ← used by the combined report
+- `data/figures/fig*.png`
 
 ## Full Workflow
 
-Includes the utilization sweep (400 samples per U-level, ~2 min) and all plots.
+Includes the utilization sweep (400 samples per U-level, ~2-5 min) and all plots.
 
 ```bash
 python3 run_all_experiments.py
 ```
-
-If `task_sets/generated/sweep/` does not exist, the sweep generates task sets on the fly.
 
 ## Individual Components
 
@@ -81,8 +88,8 @@ python3 visualizations.py
 `visualizations.py` reads CSV sources for all non-gantt plots:
 - Fig4 uses `data/fraction_schedulable_summary.csv`
 - Fig5-7 use `data/analysis_results.csv`
-- Fig8 uses `data/fig8_tc5_rt_samples.csv`
-- Fig9 uses `data/fig9_arj_u07_u08_u09.csv`
+- Fig8 uses `data/fig8_tc5_rt_samples.csv`*
+- Fig9 uses `data/fig9_arj_u07_u08_u09.csv`*
 
 Note: `visualizations.py` is read-only with respect to CSV inputs. The full workflow
 (`run_all_experiments.py`) generates `fig8/fig9` CSVs explicitly before plotting.

@@ -4,3 +4,4 @@ scipy
 docopt
 pytest
 matplotlib
+flask
