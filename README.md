@@ -48,7 +48,7 @@ python3 -m pytest tests/ -v
 
 ## Quick Start
 
-Runs analysis, batch validation, and plotting (no utilization sweep, since it can take a while to run). Generates all figures needed for the report.
+Runs analysis, batch validation, and plotting (skips utilization sweep, since it can take a while to run).
 
 ```bash
 python3 run_all_experiments.py --quick
