@@ -1,6 +1,8 @@
 # MiniProject1DRST
 
-Scheduler analysis for DM/EDF: analytical WCRT, schedulability checks, simulation, and comparison utilities.
+Scheduler analysis for periodic real-time tasks under Deadline Monotonic (DM) and Earliest Deadline First (EDF) scheduling.
+
+Computes exact DM WCRTs via response-time analysis, exact EDF WCRTs via hyperperiod simulation, and EDF schedulability via the Processor Demand Criterion. A discrete-event simulator cross-checks analytical bounds under both deterministic and stochastic execution.
 
 ---
 
@@ -12,11 +14,64 @@ Scheduler analysis for DM/EDF: analytical WCRT, schedulability checks, simulatio
 
 ---
 
+## Features
+
+| Feature | Description |
+|---------|-------------|
+| DM analytical WCRT | Exact response-time analysis (RTA) with correct tie-breaking for equal deadlines |
+| EDF analytical WCRT | Exact WCRT via deterministic hyperperiod simulation at WCET |
+| EDF schedulability | Processor Demand Criterion (PDC) check for constrained deadlines |
+| DM vs EDF comparison | Per-task WCRT comparison, schedulability rates over utilization sweep |
+| Discrete-event simulator | Deterministic (WCET) and stochastic (truncated-normal) modes; cross-checks analytical bounds |
+| Preemption analysis | Total preemption counts under DM and EDF across all test cases |
+| Jitter analysis | Absolute response jitter (ARJ) per task at U=0.7, 0.8, 0.9 |
+| Overload analysis | Deadline miss distribution under DM and EDF at U>1 |
+| Utilization sweep | Fraction of schedulable task sets from U=0.5 to U=1.0 (400 sets per level) |
+
+---
+
 ## Setup
 
 ```bash
 python3 -m pip install -r requirements.txt
 ```
+
+---
+
+## Run Tests
+
+```bash
+python3 -m pytest tests/ -v
+```
+
+3 regression tests covering edge cases (equal-deadline RTA, EDF boundary, column normalisation).
+
+---
+
+## Quick Start
+
+Runs analysis, batch validation, and plotting (no utilization sweep). Generates all figures needed for the report.
+
+```bash
+python3 run_all_experiments.py --quick
+```
+
+Outputs:
+- `data/analysis_results.csv`
+- `data/all_tasksets_results.csv`
+- `data/fig8_tc5_rt_samples.csv`
+- `data/fig9_arj_u07_u08_u09.csv`
+- `data/figures/fig*.png`
+
+## Full Workflow
+
+Includes the utilization sweep (400 samples per U-level, ~2-5 min) and all plots.
+
+```bash
+python3 run_all_experiments.py
+```
+
+---
 
 ## Web GUI
 
@@ -38,8 +93,9 @@ Open `http://localhost:5000`.
 
 CLI and all existing scripts remain unchanged. The GUI sits on top and does not modify any of them.
 
-## Run Tests
+---
 
+<<<<<<< HEAD
 ```bash
 python3 -m pytest tests/ -v
 ```
@@ -70,6 +126,9 @@ python3 run_all_experiments.py
 ```
 
 ## Individual Components
+=======
+## Individual Scripts
+>>>>>>> 6020ee1 (refactor on GUI)
 
 ```bash
 # Batch validation of provided task sets
@@ -102,13 +161,40 @@ report caption for clarification.
 Figure 8/9 consume task sets in `task_sets/generated/report_fig8_taskset.csv` and
 `task_sets/generated/report_fig9_u0*.csv`.
 
-## Layout
+---
 
-- `scheduler_analysis.py` – core DM/EDF analysis + simulation
-- `test_all_tasksets.py` – batch validation over `task_sets/`
-- `experiments.py` – utilization sweep generation and aggregation
-- `visualizations.py` – plot generation to `data/figures/`
-- `run_all_experiments.py` – orchestration (quick/full modes)
-- `data/` – analysis CSVs and generated figures
-- `task_sets/` – provided schedulable/unschedulable sets
-- `tests/` – regression test suite
+## Output Files
+
+All non-figure outputs written to `data/`:
+
+| File | Contents |
+|------|----------|
+| `analysis_results.csv` | Per-task DM/EDF WCRTs, schedulability flags, preemption counts |
+| `all_tasksets_results.csv` | Batch validation results across all provided task sets |
+| `utilization_sweep_results.csv` | Per-U-level schedulability fractions (full workflow only) |
+| `fraction_schedulable_summary.csv` | Aggregated schedulability rates per utilization level |
+| `fig8_tc5_rt_samples.csv` | Stochastic response-time samples for the constrained-deadline task set |
+| `fig9_arj_u07_u08_u09.csv` | ARJ per task at U=0.7, 0.8, 0.9 under DM and EDF |
+| `figures/fig*.png` | All generated plots |
+
+---
+
+## Project Structure
+
+```
+MiniProject1DRST/
+├── scheduler_analysis.py     # Core DM/EDF analysis + simulation
+├── test_all_tasksets.py      # Batch validation over task_sets/
+├── experiments.py            # Utilization sweep generation and aggregation
+├── visualizations.py         # Plot generation to data/figures/
+├── run_all_experiments.py    # Orchestration (quick/full modes)
+├── app.py                    # Flask web GUI
+├── templates/                # HTML templates for web GUI
+├── static/                   # Static assets for web GUI
+├── generate_gantt_charts.py  # Standalone Gantt chart generation
+├── uunifast.py               # UUniFast task set generation
+├── data/                     # Analysis CSVs and generated figures
+├── task_sets/                # Provided schedulable/unschedulable sets
+├── tests/                    # Regression test suite
+└── README.md
+```

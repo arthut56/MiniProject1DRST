@@ -3,54 +3,288 @@
 <head>
     <meta charset="UTF-8">
     <meta name="viewport" content="width=device-width, initial-scale=1.0">
-    <title>{% block title %}{% endblock %}</title>
+    <title>{% block title %}RT Scheduler{% endblock %}</title>
     <link href="https://cdn.jsdelivr.net/npm/bootstrap@5.3.0/dist/css/bootstrap.min.css" rel="stylesheet">
     <style>
-        body { background: #f8f9fa; }
+        /* ══ Retro OS Theme ════════════════════════════════════════════ */
+        :root {
+            --os-bg:         #1e1a2a;
+            --os-surface:    #2c2838;
+            --os-hi:         #6a5f88;
+            --os-lo:         #0e0c1a;
+            --os-title-a:    #6a508a;
+            --os-title-b:    #3a2f62;
+            --os-accent:     #c4923a;
+            --os-accent-dim: #7a5820;
+            --os-text:       #e2daf4;
+            --os-muted:      #8880a8;
+            --os-input:      #18152a;
+            --os-ok:         #5ab08a;
+            --os-err:        #c05070;
+            --os-warn:       #d4943a;
+            --os-font:       Tahoma, Verdana, "Segoe UI", system-ui, sans-serif;
+        }
+
+        * { box-sizing: border-box; }
+        body {
+            background: var(--os-bg);
+            color: var(--os-text);
+            font-family: var(--os-font);
+            font-size: 13px;
+        }
+
+        /* ── Sidebar ─────────────────────────────────────────────────── */
         .sidebar {
             min-height: 100vh;
-            background: #1a1a2e;
-            color: #eee;
+            background: var(--os-surface);
+            border-right: 2px solid var(--os-lo);
+            box-shadow: inset -1px 0 0 var(--os-hi);
         }
-        .sidebar .nav-link {
-            color: #ccc;
-            border-radius: 6px;
-            margin: 2px 0;
-            padding: 8px 16px;
-        }
-        .sidebar .nav-link:hover, .sidebar .nav-link.active {
-            background: #16213e;
-            color: #fff;
+        .sidebar-header {
+            background: linear-gradient(to bottom, var(--os-title-a), var(--os-title-b));
+            padding: 10px 14px;
+            border-bottom: 2px solid var(--os-lo);
+            box-shadow: inset 0 1px 0 rgba(255,255,255,0.22), 0 1px 0 var(--os-hi);
         }
         .sidebar-brand {
-            font-size: 1.1rem;
+            font-size: 12px;
             font-weight: 700;
-            color: #7eb8f7;
-            padding: 20px 16px 10px;
+            color: #fff;
+            display: block;
+            text-shadow: 1px 1px 0 rgba(0,0,0,0.55);
         }
+        .sidebar-brand small { font-size: 10px; color: rgba(255,255,255,0.65); font-weight: 400; }
         .sidebar-section {
-            font-size: 0.7rem;
+            font-size: 9px;
+            font-weight: 700;
             text-transform: uppercase;
-            letter-spacing: 0.08em;
-            color: #666;
-            padding: 14px 16px 4px;
+            letter-spacing: 0.1em;
+            color: var(--os-muted);
+            padding: 10px 14px 3px;
+            border-top: 1px solid var(--os-lo);
         }
-        .main-content { padding: 28px; }
-        .badge-schedulable { background: #198754; }
-        .badge-unschedulable { background: #dc3545; }
-        .result-card { border-left: 4px solid #0d6efd; }
-        .result-card.success { border-left-color: #198754; }
-        .result-card.failure { border-left-color: #dc3545; }
-        table.results th { background: #1a1a2e; color: #fff; }
-        .fig-card img { width: 100%; border-radius: 4px; cursor: zoom-in; }
-        .flash-msg { position: fixed; top: 70px; right: 20px; z-index: 9999; min-width: 300px; }
+        .sidebar .nav-link {
+            color: var(--os-text);
+            border-radius: 0;
+            margin: 0;
+            padding: 5px 14px;
+            font-size: 12px;
+            border: 1px solid transparent;
+        }
+        .sidebar .nav-link:hover {
+            background: rgba(106,95,136,0.4);
+            color: #fff;
+            border-color: var(--os-hi);
+        }
+        .sidebar .nav-link.active {
+            background: linear-gradient(to bottom, var(--os-accent), var(--os-accent-dim));
+            color: #fff;
+            border-color: #c0780a;
+            text-shadow: 1px 1px 0 rgba(0,0,0,0.5);
+            box-shadow: inset 1px 1px 0 rgba(255,255,255,0.2), inset -1px -1px 0 rgba(0,0,0,0.3);
+        }
+
+        .main-content { padding: 18px 22px; }
+
+        /* ── Cards ───────────────────────────────────────────────────── */
+        .card {
+            background: var(--os-surface);
+            border: 2px solid;
+            border-color: var(--os-hi) var(--os-lo) var(--os-lo) var(--os-hi);
+            border-radius: 0;
+            color: var(--os-text);
+            box-shadow: 2px 2px 5px rgba(0,0,0,0.55);
+        }
+        .card-header {
+            background: linear-gradient(to bottom, var(--os-title-a), var(--os-title-b));
+            color: #fff;
+            border-bottom: 2px solid var(--os-lo);
+            border-radius: 0 !important;
+            font-size: 12px;
+            font-weight: 700;
+            padding: 5px 10px;
+            text-shadow: 1px 1px 0 rgba(0,0,0,0.55);
+            box-shadow: inset 0 1px 0 rgba(255,255,255,0.18);
+        }
+        .card-body  { background: var(--os-surface); padding: 12px; }
+        .card-footer {
+            background: var(--os-surface);
+            border-top: 1px solid var(--os-lo);
+            padding: 8px 12px;
+        }
+
+        /* ── Buttons ─────────────────────────────────────────────────── */
+        .btn {
+            border-radius: 0;
+            font-family: var(--os-font);
+            font-size: 12px;
+            padding: 4px 14px;
+            font-weight: 400;
+            cursor: pointer;
+        }
+        .btn, .btn-primary, .btn-secondary, .btn-success, .btn-danger,
+        .btn-outline-primary, .btn-outline-secondary, .btn-outline-danger {
+            border: 2px solid;
+            border-color: var(--os-hi) var(--os-lo) var(--os-lo) var(--os-hi);
+            box-shadow: inset 1px 1px 0 rgba(255,255,255,0.18), inset -1px -1px 0 rgba(0,0,0,0.35);
+            border-radius: 0;
+        }
+        .btn:active {
+            border-color: var(--os-lo) var(--os-hi) var(--os-hi) var(--os-lo) !important;
+            box-shadow: inset -1px -1px 0 rgba(255,255,255,0.18), inset 1px 1px 0 rgba(0,0,0,0.35) !important;
+            transform: translate(1px, 1px);
+        }
+        .btn-primary {
+            background: linear-gradient(to bottom, var(--os-accent), var(--os-accent-dim));
+            color: #fff;
+            border-color: #c8880e var(--os-lo) var(--os-lo) #c8880e;
+            text-shadow: 1px 1px 0 rgba(0,0,0,0.4);
+        }
+        .btn-primary:hover, .btn-primary:focus { background: linear-gradient(to bottom, #d4a04a, #8a6030); color: #fff; }
+        .btn-secondary, .btn-outline-secondary {
+            background: linear-gradient(to bottom, #4a4560, #2e2a45);
+            color: var(--os-text);
+        }
+        .btn-secondary:hover, .btn-outline-secondary:hover { background: linear-gradient(to bottom, #5a5570, #3a3655); color: #fff; }
+        .btn-outline-primary {
+            background: linear-gradient(to bottom, #3c3460, #28244a);
+            color: #b090e0;
+            border-color: #7060a8 var(--os-lo) var(--os-lo) #7060a8;
+        }
+        .btn-outline-primary:hover { background: linear-gradient(to bottom, var(--os-accent), var(--os-accent-dim)); color: #fff; }
+        .btn-outline-danger, .btn-danger {
+            background: linear-gradient(to bottom, #5c2840, #3c1828);
+            color: #e080a0;
+            border-color: #8c3858 var(--os-lo) var(--os-lo) #8c3858;
+        }
+        .btn-sm { padding: 2px 10px; font-size: 11px; }
+
+        /* ── Forms ───────────────────────────────────────────────────── */
+        .form-control, .form-select,
+        input[type="text"], input[type="number"], input[type="file"],
+        textarea, select {
+            background: var(--os-input);
+            border: 2px solid;
+            border-color: var(--os-lo) var(--os-hi) var(--os-hi) var(--os-lo);
+            box-shadow: inset 1px 1px 0 rgba(0,0,0,0.3);
+            color: var(--os-text);
+            border-radius: 0;
+            font-family: var(--os-font);
+            font-size: 12px;
+            padding: 4px 7px;
+        }
+        .form-control:focus, .form-select:focus, input:focus, select:focus, textarea:focus {
+            outline: 1px dotted var(--os-accent);
+            border-color: var(--os-accent) var(--os-hi) var(--os-hi) var(--os-accent);
+            background: var(--os-input);
+            color: var(--os-text);
+            box-shadow: inset 1px 1px 0 rgba(0,0,0,0.3);
+        }
+        .form-label, label { color: var(--os-muted); font-size: 11px; margin-bottom: 2px; }
+        .form-text { color: var(--os-muted); font-size: 10px; }
+        option { background: var(--os-surface); color: var(--os-text); }
+
+        /* ── Tables ──────────────────────────────────────────────────── */
+        .table, table { color: var(--os-text); font-size: 12px; background: transparent; }
+        .table th, table th,
+        .table-dark th, thead.table-dark th {
+            background: linear-gradient(to bottom, var(--os-title-a), var(--os-title-b)) !important;
+            color: #fff !important;
+            font-size: 10px;
+            font-weight: 700;
+            text-transform: uppercase;
+            letter-spacing: 0.05em;
+            border-color: var(--os-lo) !important;
+            padding: 6px 10px;
+            text-shadow: 1px 1px 0 rgba(0,0,0,0.5);
+        }
+        .table td, table td { border-color: var(--os-lo); padding: 5px 10px; }
+        .table-hover tbody tr:hover td { background: rgba(100,80,140,0.2) !important; }
+        table.results th { background: linear-gradient(to bottom, var(--os-title-a), var(--os-title-b)); color: #fff; }
+        .table-bordered td, .table-bordered th { border-color: var(--os-lo); }
+
+        /* ── Alerts ──────────────────────────────────────────────────── */
+        .alert { border-radius: 0; font-size: 12px; border: 2px solid; }
+        .alert-info    { background: #1a2c3a; color: #80c0e0; border-color: #3a6080 var(--os-lo) var(--os-lo) #3a6080; }
+        .alert-warning { background: #2a2010; color: var(--os-warn); border-color: #8a6020 var(--os-lo) var(--os-lo) #8a6020; }
+        .alert-danger  { background: #2a1020; color: #e080a0; border-color: #8a2848 var(--os-lo) var(--os-lo) #8a2848; }
+        .alert-link    { color: inherit; text-decoration: underline; }
+
+        /* ── Progress bars ───────────────────────────────────────────── */
+        .progress {
+            background: var(--os-input);
+            border: 1px solid var(--os-lo);
+            border-radius: 0;
+        }
+        .progress-bar { border-radius: 0; box-shadow: inset 0 1px 0 rgba(255,255,255,0.25); }
+        .progress-bar.bg-danger  { background: #8c3050 !important; }
+        .progress-bar.bg-success { background: #3a8060 !important; }
+
+        /* ── Nav tabs ─────────────────────────────────────────────────── */
+        .nav-tabs { border-bottom: 2px solid var(--os-lo); }
+        .nav-tabs .nav-link {
+            color: var(--os-muted);
+            background: var(--os-bg);
+            border: 2px solid;
+            border-color: var(--os-hi) var(--os-lo) transparent var(--os-hi);
+            border-radius: 0;
+            font-size: 12px;
+            padding: 4px 12px;
+            margin-right: 2px;
+            margin-bottom: -2px;
+        }
+        .nav-tabs .nav-link:hover  { color: var(--os-text); background: var(--os-surface); }
+        .nav-tabs .nav-link.active { background: var(--os-surface); color: var(--os-text); border-bottom-color: var(--os-surface); }
+
+        /* ── Badges ───────────────────────────────────────────────────── */
+        .badge { border-radius: 0; font-size: 10px; padding: 2px 6px; font-family: var(--os-font); }
+        .badge-schedulable   { background: #2a5040; color: #80d0b0; border: 1px solid #3a7060; }
+        .badge-unschedulable { background: #5a1828; color: #e08090; border: 1px solid #8a2848; }
+        .bg-success { background: #2a5040 !important; }
+        .bg-danger  { background: #5a1828 !important; }
+
+        /* ── Result cards ─────────────────────────────────────────────── */
+        .result-card { border-left: 3px solid var(--os-hi) !important; }
+        .result-card.success { border-left-color: var(--os-ok) !important; }
+        .result-card.failure { border-left-color: var(--os-err) !important; }
+
+        /* ── Text utilities ───────────────────────────────────────────── */
+        .text-muted   { color: var(--os-muted) !important; }
+        .text-danger  { color: var(--os-err) !important; }
+        .text-success { color: var(--os-ok) !important; }
+        h4, h5 { color: var(--os-text); font-size: 14px; font-weight: 700; margin-bottom: 6px; }
+
+        /* ── Flash messages ───────────────────────────────────────────── */
+        .flash-msg { position: fixed; top: 10px; right: 14px; z-index: 9999; min-width: 260px; border-radius: 0; }
+
+        /* ── Figures ─────────────────────────────────────────────────── */
+        .fig-card img { width: 100%; border-radius: 0; cursor: zoom-in; border: 1px solid var(--os-lo); }
+
+        /* ── List group ──────────────────────────────────────────────── */
+        .list-group-item {
+            background: var(--os-surface); border-color: var(--os-lo);
+            color: var(--os-text); font-size: 12px; padding: 5px 12px;
+        }
+        .list-group-item:hover { background: #34304a; }
+
+        /* ── Modal ───────────────────────────────────────────────────── */
+        .modal-content { background: var(--os-surface); border: 2px solid var(--os-hi); border-radius: 0; }
+
+        /* ── Misc ────────────────────────────────────────────────────── */
+        code { background: var(--os-input); color: #c0a0e0; padding: 1px 4px; font-size: 11px; border: 1px solid var(--os-lo); }
+        hr { border-color: var(--os-lo); }
+        .fw-bold, .fw-semibold { font-weight: 700 !important; }
+        .fs-4 { font-size: 1.4rem !important; }
+        .fs-5 { font-size: 1.1rem !important; }
     </style>
 </head>
 <body>
 <div class="d-flex">
     <!-- Sidebar -->
-    <nav class="sidebar d-flex flex-column" style="width:220px;min-width:220px;">
-        <div class="sidebar-brand">RT Scheduler<br><small style="font-size:.7rem;color:#7eb8f7;font-weight:400;">DM / EDF Analysis</small></div>
+    <nav class="sidebar d-flex flex-column" style="width:210px;min-width:210px;">
+        <div class="sidebar-header">
+            <div class="sidebar-brand">RT Scheduler<br><small>DM / EDF Analysis</small></div>
+        </div>
         <div class="sidebar-section">Analysis</div>
         <a class="nav-link {% if request.endpoint=='index' %}active{% endif %}" href="/">Dashboard</a>
         <a class="nav-link {% if request.endpoint=='analyze' %}active{% endif %}" href="/analyze">Analyze Task Set</a>
@@ -64,7 +298,7 @@
     </nav>
 
     <!-- Main -->
-    <div class="flex-grow-1">
+    <div class="flex-grow-1" style="background:var(--os-bg);">
         <div class="main-content">
             {% with messages = get_flashed_messages(with_categories=true) %}
               {% for cat, msg in messages %}
@@ -81,9 +315,9 @@
 <!-- Lightbox modal -->
 <div class="modal fade" id="figModal" tabindex="-1">
     <div class="modal-dialog modal-xl modal-dialog-centered">
-        <div class="modal-content bg-dark">
-            <div class="modal-body p-1">
-                <img id="figModalImg" src="" class="w-100" style="border-radius:4px;">
+        <div class="modal-content">
+            <div class="modal-body p-1" style="background:#000;">
+                <img id="figModalImg" src="" class="w-100">
             </div>
         </div>
     </div>
