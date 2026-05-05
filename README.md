@@ -32,7 +32,11 @@ Computes exact DM WCRTs via response-time analysis, exact EDF WCRTs via hyperper
 
 ## Setup
 
+Optional (recommended): create and activate a virtual environment, then install dependencies.
+
 ```bash
+python3 -m venv .venv
+source .venv/bin/activate   # Windows: .venv\Scripts\activate
 python3 -m pip install -r requirements.txt
 ```
 
