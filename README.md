@@ -64,7 +64,7 @@ Outputs:
 - `data/figures/fig*.png`
 
 ## Full Workflow
-
+CLAUDE.md
 Includes the utilization sweep (400 samples per U-level, ~2-5 min) and all plots.
 
 ```bash
@@ -95,40 +95,7 @@ CLI and all existing scripts remain unchanged. The GUI sits on top and does not 
 
 ---
 
-<<<<<<< HEAD
-```bash
-python3 -m pytest tests/ -v
-```
-
-3 regression tests covering edge cases (equal-deadline RTA, EDF boundary, column normalisation).
-
-## Quick Start
-
-Runs analysis, batch validation, and plotting (skips utilization sweep, since it can take a while to run).
-
-```bash
-python3 run_all_experiments.py --quick
-```
-
-Outputs:
-- `data/analysis_results.csv`
-- `data/all_tasksets_results.csv`
-- `data/fig8_tc5_rt_samples.csv`
-- `data/fig9_arj_u07_u08_u09.csv`
-- `data/figures/fig*.png`
-
-## Full Workflow
-
-Includes the utilization sweep (400 samples per U-level, ~2-5 min) and all plots.
-
-```bash
-python3 run_all_experiments.py
-```
-
-## Individual Components
-=======
 ## Individual Scripts
->>>>>>> 6020ee1 (refactor on GUI)
 
 ```bash
 # Batch validation of provided task sets
